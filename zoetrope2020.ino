@@ -16,6 +16,8 @@
 #define NUM_LED_PER_STRIP   36          // Max LED Circuits under test (New boards have 20 per metre)
 #define NUM_STRIPS           3
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
+#define NUM_LOOPS            3
+#define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
 #define DATA_PIN1           11          // MOSI PIN
 #define CLOCK_PIN1          13          // SCK PIN
 #define DATA_PIN2           26          // MOSI PIN
@@ -34,18 +36,25 @@ enum anim_mode_t {
 
 /**************************************** Global Variables ******************************************/
 CRGB leds[NUM_LEDS]; // LED Output Buffer
+CRGB* loops[NUM_LOOPS];
 int debounce = 0;
 enum anim_mode_t mode = ANIM_MOVING_DOT;
 Metro eventMetro = Metro(1000);
 
 /************************************* Setup + Main + Functions *************************************/
 void setup() {
+  // init loops array of indexes into leds buffer
+  for (int i=0; i<NUM_LOOPS; i++) {
+    loops[i] = leds + i * NUM_LEDS_PER_LOOP;
+  }
+  
   // GPIO
   pinMode(3, INPUT_PULLUP);
   pinMode(2, OUTPUT);
   digitalWrite(2, LOW);
 
   // FastLED
+  //FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LED_PER_STRIP).setCorrection(TypicalLEDStrip);
   FastLED.addLeds<LED_TYPE, DATA_PIN2, CLOCK_PIN2, COLOUR_ORDER> (leds + NUM_LED_PER_STRIP, NUM_LED_PER_STRIP * 2).setCorrection(TypicalLEDStrip);
   //FastLED.addLeds<LED_TYPE, DATA_PIN3, CLOCK_PIN3, COLOUR_ORDER> (ledstrip3, NUM_LED_PER_STRIP).setCorrection(TypicalLEDStrip);
@@ -83,7 +92,7 @@ void setupAnimation(void) {
   switch (mode) {
     case ANIM_MOVING_DOT:
       Serial.println("ANIM_MOVING_DOT");
-      eventMetro.interval(30);
+      eventMetro.interval(130);
       eventMetro.reset();
       break;
     case ANIM_HUECYCLE:
@@ -117,21 +126,41 @@ void animationFrame(void) {
   }
 }
 
+void movingDot(void) {
+  static uint8_t hues[NUM_LOOPS] = {0};
+  static int dots[NUM_LOOPS] = {0};
+  // init hues and dot indexs
+  bool needInit = true;
+  for (int i=0; i<NUM_LOOPS; i++)
+    if (hues[i] != 0)
+      needInit = false;
+  if (needInit) {
+    for (int i=0; i<NUM_LOOPS; i++) {
+      hues[i] = i * 256/NUM_LOOPS;
+      dots[i] = i * NUM_LEDS_PER_LOOP/NUM_LOOPS;
+    } 
+  }
+  // set dots to current hue
+  for (int i=0; i<NUM_LOOPS; i++)
+    loops[i][dots[i]] = CHSV(hues[i]++, 255, 255);
+  // show leds
+  FastLED.show();
+  // reset leds and update dot indexs
+  for (int i=0; i<NUM_LOOPS; i++) {
+    int dot = dots[i];  
+    // clear this led for the next time around the loop
+    loops[i][dot] = CRGB::Black;
+    // update dot index for next time
+    dot++;
+    if (dot >= NUM_LEDS_PER_LOOP)
+      dot = 0;
+    dots[i] = dot;
+  }
+}
+
 void hueCycle(void) {
   static uint8_t hue = 0;
   FastLED.showColor(CHSV(hue++, 255, 255)); 
-}
-
-void movingDot(void) {
-  static uint8_t hue = 0;
-  static int dot = 0;
-  leds[dot] = CHSV(hue++, 255, 255);
-  FastLED.show();
-  // clear this led for the next time around the loop
-  leds[dot] = CRGB::Black;
-  dot++;
-  if (dot >= NUM_LED_PER_STRIP * NUM_STRIPS)
-    dot = 0;
 }
 
 void paletteShift(void) {
@@ -140,9 +169,12 @@ void paletteShift(void) {
    CRGB(255, 0, 0),
    CRGB(0, 0, 255),
    CRGB(255, 0, 0)
-);
-  for (int i=0; i<NUM_LEDS; i++) {   
-      leds[i] = ColorFromPalette(red_blue_red, i + offset);
+  );
+  CRGBPalette16 palettes[NUM_LOOPS] = {red_blue_red, PartyColors_p, OceanColors_p/*, LavaColors_p*/};
+  for (int i=0; i<NUM_LOOPS; i++) {
+    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {   
+      loops[i][j] = ColorFromPalette(palettes[i], j + offset);
+    }
   }
   FastLED.show();
   offset++;
