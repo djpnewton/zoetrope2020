@@ -14,7 +14,7 @@
 /********************************** FastLED and Hardware Config *************************************/
 #define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
 #define NUM_LED_PER_STRIP   20          // Max LED Circuits under test (New boards have 20 per metre)
-#define NUM_STRIPS           4
+#define NUM_STRIPS          04
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
@@ -31,6 +31,9 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
+#define BUTTON_PIN_IN       2
+#define BUTTON_PIN_OUT      3
+#define TIMING_PIN_OUT      5
 /**************************************** Definitions ***********************************************/
 enum anim_mode_t {
     ANIM_MOVING_DOT = 0,
@@ -72,11 +75,15 @@ void setup() {
     loops[i] = leds + i * NUM_LEDS_PER_LOOP;
   }
   
-  // GPIO
-  pinMode(3, INPUT_PULLUP);
-  pinMode(2, OUTPUT);
-  digitalWrite(2, LOW);
+  // GPIO button
+  pinMode(BUTTON_PIN_IN, INPUT_PULLUP);
+  pinMode(BUTTON_PIN_OUT, OUTPUT);
+  digitalWrite(BUTTON_PIN_OUT, LOW);
 
+  // GPIO timing signal
+  pinMode(TIMING_PIN_OUT, OUTPUT);
+  digitalWrite(TIMING_PIN_OUT, LOW);
+  
   // FastLED
   FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   //FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LED_PER_STRIP).setCorrection(TypicalLEDStrip);
@@ -102,7 +109,7 @@ void loop() {
   }
 
   // change animation mode
-  if (digitalRead(3) == LOW) {
+  if (digitalRead(BUTTON_PIN_IN) == LOW) {
     debounce++;
     if (debounce > 100) {
       delay(100);
@@ -144,6 +151,8 @@ void animationCancel(void) {
 }
 
 void animationFrame(void) {
+  digitalWrite(TIMING_PIN_OUT, HIGH);
+  
   switch (mode) {
     case ANIM_MOVING_DOT:
       movingDot();
@@ -158,6 +167,8 @@ void animationFrame(void) {
       paletteShift();
       break;
   }
+
+  digitalWrite(TIMING_PIN_OUT, LOW);
 }
 
 void movingDot(void) {
