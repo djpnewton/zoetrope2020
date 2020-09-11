@@ -31,10 +31,15 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
+#define STEPPER_INTERVAL   10           // 10ms
+
+#define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       2
 #define BUTTON_PIN_OUT      3
 #define TIMING_PIN_OUT      5
+
 /**************************************** Definitions ***********************************************/
+
 enum anim_mode_t {
     ANIM_MOVING_DOT = 0,
     ANIM_STATIC_RGB = 1,
@@ -43,12 +48,14 @@ enum anim_mode_t {
 };
 
 /**************************************** Global Variables ******************************************/
+
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 int debounce = 0;
 enum anim_mode_t mode = ANIM_MOVING_DOT;
-Metro eventMetro = Metro(1000);
+Metro eventAnim = Metro(1000);
+Metro eventStepper = Metro(1000);
 
 /************************************* Setup + Main + Functions *************************************/
 
@@ -74,6 +81,10 @@ void setup() {
   for (int i=0; i<NUM_LOOPS; i++) {
     loops[i] = leds + i * NUM_LEDS_PER_LOOP;
   }
+
+  // GPIO stepper
+  pinMode(STEPPER_PIN_OUT, OUTPUT);
+  digitalWrite(STEPPER_PIN_OUT, LOW);
   
   // GPIO button
   pinMode(BUTTON_PIN_IN, INPUT_PULLUP);
@@ -93,6 +104,7 @@ void setup() {
 
   // events
   setupAnimation();
+  setupStepper();
 
   // serial
   Serial.begin(115200);
@@ -100,8 +112,18 @@ void setup() {
 }
 
 void loop() {
+  // step stepper
+  static bool stepperOn = false;
+  if (eventStepper.check() == 1) {
+    if (stepperOn)
+      digitalWrite(STEPPER_PIN_OUT, HIGH);
+    else
+      digitalWrite(STEPPER_PIN_OUT, LOW);
+    stepperOn = !stepperOn;
+  }
+  
   // run next animation frame
-  if (eventMetro.check() == 1) {
+  if (eventAnim.check() == 1) {
     if (led_failsafe)
       animationCancel();
     else
@@ -122,8 +144,8 @@ void loop() {
 }
 
 void setupAnimation(void) {
-  eventMetro.interval(FRAME_INTERVAL);
-  eventMetro.reset();
+  eventAnim.interval(FRAME_INTERVAL);
+  eventAnim.reset();
   
   switch (mode) {
     case ANIM_MOVING_DOT:
@@ -143,6 +165,11 @@ void setupAnimation(void) {
       setupAnimation();
       break;
   }
+}
+
+void setupStepper(void) {
+  eventStepper.interval(STEPPER_INTERVAL);
+  eventStepper.reset();
 }
 
 void animationCancel(void) {
@@ -167,6 +194,8 @@ void animationFrame(void) {
       paletteShift();
       break;
   }
+  delay(1);
+  ledsClear();
 
   digitalWrite(TIMING_PIN_OUT, LOW);
 }
@@ -197,8 +226,6 @@ void movingDot(void) {
   }
   // show leds
   FastLED.show();
-  delay(1);
-  ledsClear();
 }
 
 void staticRGB(void) {
@@ -213,15 +240,11 @@ void staticRGB(void) {
     leds[i] = color;
   }
   FastLED.show();
-  delay(1);
-  ledsClear();
 }
 
 void hueCycle(void) {
   static uint8_t hue = 0;
   FastLED.showColor(CHSV(hue++, 255, 255));
-  delay(1);
-  ledsClear();
 }
 
 void paletteShift(void) {
@@ -239,8 +262,6 @@ void paletteShift(void) {
   }
   offset++;
   FastLED.show();
-  delay(1);
-  ledsClear();
 }
 
 void ledsClear(void) {
