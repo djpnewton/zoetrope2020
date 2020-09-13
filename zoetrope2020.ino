@@ -11,19 +11,17 @@
 #include <FastLED.h>
 #include <Metro.h>
 
+#include "rn4870.h"
+
 /********************************** FastLED and Hardware Config *************************************/
 #define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
 #define NUM_LED_PER_STRIP   20          // Max LED Circuits under test (New boards have 20 per metre)
-#define NUM_STRIPS          04
+#define NUM_STRIPS          36
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
 #define DATA_PIN1           11          // MOSI PIN
 #define CLOCK_PIN1          13          // SCK PIN
-#define DATA_PIN2           26          // MOSI PIN
-#define CLOCK_PIN2          27          // SCK PIN
-//#define DATA_PIN3           50          // MOSI PIN
-//#define CLOCK_PIN3          49          // SCK PIN
 #define LED_TYPE            LPD8806     // SPI Chipset LPD8806 (Same as 2019 Zoetrope)
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
@@ -41,10 +39,11 @@
 /**************************************** Definitions ***********************************************/
 
 enum anim_mode_t {
-    ANIM_MOVING_DOT = 0,
-    ANIM_STATIC_RGB = 1,
-    ANIM_HUECYCLE = 2,
-    ANIM_PALETTESHIFT = 3
+    STOPPED = 0,
+    ANIM_MOVING_DOT = 1,
+    ANIM_STATIC_RGB = 2,
+    ANIM_HUECYCLE = 3,
+    ANIM_PALETTESHIFT = 4
 };
 
 /**************************************** Global Variables ******************************************/
@@ -53,9 +52,10 @@ bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too 
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 int debounce = 0;
-enum anim_mode_t mode = ANIM_MOVING_DOT;
+enum anim_mode_t mode = STOPPED;
 Metro eventAnim = Metro(1000);
 Metro eventStepper = Metro(1000);
+char bleBuffer[100];
 
 /************************************* Setup + Main + Functions *************************************/
 
@@ -96,15 +96,16 @@ void setup() {
   digitalWrite(TIMING_PIN_OUT, LOW);
   
   // FastLED
-  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-  //FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER> (leds, NUM_LED_PER_STRIP).setCorrection(TypicalLEDStrip);
-  //FastLED.addLeds<LED_TYPE, DATA_PIN2, CLOCK_PIN2, COLOUR_ORDER> (leds + NUM_LED_PER_STRIP, NUM_LED_PER_STRIP * 2).setCorrection(TypicalLEDStrip);
-  //FastLED.addLeds<LED_TYPE, DATA_PIN3, CLOCK_PIN3, COLOUR_ORDER> (ledstrip3, NUM_LED_PER_STRIP).setCorrection(TypicalLEDStrip);
+  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER, DATA_RATE_MHZ(25)> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(GLOBAL_BRIGHTNESS);
 
   // events
   setupAnimation();
   setupStepper();
+
+  // ble
+  //setupBle();
+  //Serial3.begin(115200);
 
   // serial
   Serial.begin(115200);
@@ -112,9 +113,23 @@ void setup() {
 }
 
 void loop() {
+  /*
+  // read serial, write to serial3
+  if (Serial.available() > 0) {
+    uint8_t byte = Serial.read();
+    Serial3.write(byte);
+    //Serial.write(byte);
+  }
+  // read serial3, write to serial
+  if (Serial3.available() > 0) {
+    Serial.write(Serial3.read());
+  }
+  return;
+  */
+  
   // step stepper
   static bool stepperOn = false;
-  if (eventStepper.check() == 1) {
+  if (eventStepper.check() == 1 && mode != STOPPED) {
     if (stepperOn)
       digitalWrite(STEPPER_PIN_OUT, HIGH);
     else
@@ -131,6 +146,11 @@ void loop() {
   }
 
   // change animation mode
+  /*
+  if (ble_rn4870.hasAnswer()==dataAnswer) {
+      Serial.write(ble_rn4870.getLastAnswer());
+  }
+  */
   if (digitalRead(BUTTON_PIN_IN) == LOW) {
     debounce++;
     if (debounce > 100) {
@@ -148,6 +168,9 @@ void setupAnimation(void) {
   eventAnim.reset();
   
   switch (mode) {
+    case STOPPED:
+      Serial.println("STOPPED");
+      break;
     case ANIM_MOVING_DOT:
       Serial.println("ANIM_MOVING_DOT");
       break;
@@ -161,7 +184,7 @@ void setupAnimation(void) {
       Serial.println("ANIM_PALETTESHIFT");
       break;
     default:
-      mode = ANIM_MOVING_DOT;
+      mode = STOPPED;
       setupAnimation();
       break;
   }
@@ -170,6 +193,28 @@ void setupAnimation(void) {
 void setupStepper(void) {
   eventStepper.interval(STEPPER_INTERVAL);
   eventStepper.reset();
+}
+
+void setupBle(void) {
+  delay(1000);
+  ble_rn4870.begin(bleBuffer, sizeof(bleBuffer), &Serial3);  
+  int count = 0;
+  while (count++ < 5) {
+    delay(100);
+    if (!ble_rn4870.startBLE()) {
+      Serial.println("Cannot Start the BLE");
+    } else {
+      Serial.print("Start the BLE with ");
+      const char *mac = ble_rn4870.getAddress();
+      for (int i=0; i<5; i++){
+          Serial.print(mac[i], HEX);
+          Serial.print('-');
+      }        
+      Serial.print(mac[5], HEX);
+      Serial.println(" address");
+      break;
+    }
+  }
 }
 
 void animationCancel(void) {
@@ -181,6 +226,8 @@ void animationFrame(void) {
   digitalWrite(TIMING_PIN_OUT, HIGH);
   
   switch (mode) {
+    case STOPPED:
+      break;
     case ANIM_MOVING_DOT:
       movingDot();
       break;
@@ -194,7 +241,7 @@ void animationFrame(void) {
       paletteShift();
       break;
   }
-  delay(1);
+  //delay(1);
   ledsClear();
 
   digitalWrite(TIMING_PIN_OUT, LOW);
