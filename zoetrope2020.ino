@@ -29,7 +29,8 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
-#define STEPPER_INTERVAL   10           // 10ms
+#define STEPPER_INTERVAL    (1000000/1036) // 1036hz
+#define STEPPER_PULSE       10             // 10us
 
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       2
@@ -54,7 +55,8 @@ CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 int debounce = 0;
 enum anim_mode_t mode = STOPPED;
 Metro eventAnim = Metro(1000);
-Metro eventStepper = Metro(1000);
+IntervalTimer intStepperOn;
+IntervalTimer intStepperOff;
 char bleBuffer[100];
 
 /************************************* Setup + Main + Functions *************************************/
@@ -127,16 +129,6 @@ void loop() {
   return;
   */
   
-  // step stepper
-  static bool stepperOn = false;
-  if (eventStepper.check() == 1 && mode != STOPPED) {
-    if (stepperOn)
-      digitalWrite(STEPPER_PIN_OUT, HIGH);
-    else
-      digitalWrite(STEPPER_PIN_OUT, LOW);
-    stepperOn = !stepperOn;
-  }
-  
   // run next animation frame
   if (eventAnim.check() == 1) {
     if (led_failsafe)
@@ -191,8 +183,17 @@ void setupAnimation(void) {
 }
 
 void setupStepper(void) {
-  eventStepper.interval(STEPPER_INTERVAL);
-  eventStepper.reset();
+  intStepperOn.begin(stepperOn, STEPPER_INTERVAL);
+}
+
+void stepperOn(void) {
+  intStepperOff.begin(stepperOff, STEPPER_PULSE);
+  digitalWrite(STEPPER_PIN_OUT, HIGH);
+}
+
+void stepperOff(void) {
+  intStepperOff.end();
+  digitalWrite(STEPPER_PIN_OUT, LOW);  
 }
 
 void setupBle(void) {
