@@ -14,9 +14,9 @@
 #include "rn4870.h"
 
 /********************************** FastLED and Hardware Config *************************************/
-#define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
-#define NUM_LED_PER_STRIP   20          // Max LED Circuits under test (New boards have 20 per metre)
-#define NUM_STRIPS          36
+#define GLOBAL_BRIGHTNESS    200          // LED brightness (0-255), defines the LED PWM duty cycle
+#define NUM_LED_PER_STRIP   30         // Max LED Circuits under test (New boards have 20 per metre)
+#define NUM_STRIPS          8
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
@@ -25,7 +25,7 @@
 #define LED_TYPE            LPD8806     // SPI Chipset LPD8806 (Same as 2019 Zoetrope)
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 24          // Generally 24 for tv and film etc
+#define FPS                 48          // Generally 24 for tv and film etc
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
