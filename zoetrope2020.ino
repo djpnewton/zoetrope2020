@@ -59,7 +59,6 @@ char bleBuffer[100];
 
 volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
 volatile bool running_debounce = false; // Whether the debounce is being checked (To avoid resetting the start of debounce, if the interrupt repeatedly triggers)
-volatile bool used_button = false;
 #define DEBOUNCE_TIME 150 // How long to debounce for
 
 /************************************* Setup + Main + Functions *************************************/
@@ -145,17 +144,12 @@ void loop() {
       Serial.write(ble_rn4870.getLastAnswer());
   }
   */
-  if (running_debounce && ((millis() - last_interrupt) > DEBOUNCE_TIME) && !used_button && !digitalRead(BUTTON_PIN_IN)) {
+  if (running_debounce && ((millis() - last_interrupt) > DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
       running_debounce = false;
-      used_button = true;
       last_interrupt = millis();
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
       setupAnimation();
   }
-
-  if(used_button && (millis() - last_interrupt) > DEBOUNCE_TIME && digitalRead(BUTTON_PIN_IN)){
-    used_button = false;
-    }
 }
 
 void setupAnimation(void) {
