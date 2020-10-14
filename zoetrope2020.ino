@@ -33,8 +33,7 @@
 #define STEPPER_PULSE       10             // 10us
 
 #define STEPPER_PIN_OUT     0
-#define BUTTON_PIN_IN       2
-#define BUTTON_PIN_OUT      3
+#define BUTTON_PIN_IN       1
 #define TIMING_PIN_OUT      5
 
 /**************************************** Definitions ***********************************************/
@@ -52,12 +51,16 @@ enum anim_mode_t {
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
-int debounce = 0;
 enum anim_mode_t mode = STOPPED;
 Metro eventAnim = Metro(1000);
 IntervalTimer intStepperOn;
 IntervalTimer intStepperOff;
 char bleBuffer[100];
+
+volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
+volatile bool running_debounce = false; // Whether the debounce is being checked (To avoid resetting the start of debounce, if the interrupt repeatedly triggers)
+volatile bool used_button = false;
+#define DEBOUNCE_TIME 150 // How long to debounce for
 
 /************************************* Setup + Main + Functions *************************************/
 
@@ -90,8 +93,7 @@ void setup() {
   
   // GPIO button
   pinMode(BUTTON_PIN_IN, INPUT_PULLUP);
-  pinMode(BUTTON_PIN_OUT, OUTPUT);
-  digitalWrite(BUTTON_PIN_OUT, LOW);
+  attachInterrupt(BUTTON_PIN_IN, button_pressed, FALLING); 
 
   // GPIO timing signal
   pinMode(TIMING_PIN_OUT, OUTPUT);
@@ -143,16 +145,17 @@ void loop() {
       Serial.write(ble_rn4870.getLastAnswer());
   }
   */
-  if (digitalRead(BUTTON_PIN_IN) == LOW) {
-    debounce++;
-    if (debounce > 100) {
-      delay(100);
+  if (running_debounce && ((millis() - last_interrupt) > DEBOUNCE_TIME) && !used_button && !digitalRead(BUTTON_PIN_IN)) {
+      running_debounce = false;
+      used_button = true;
+      last_interrupt = millis();
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
       setupAnimation();
-      debounce = 0;
+  }
+
+  if(used_button && (millis() - last_interrupt) > DEBOUNCE_TIME && digitalRead(BUTTON_PIN_IN)){
+    used_button = false;
     }
-  } else
-    debounce = 0;
 }
 
 void setupAnimation(void) {
@@ -317,4 +320,11 @@ void ledsClear(void) {
   fill_solid(leds, NUM_LEDS, CRGB::Black);
   FastLED.show();
   //FastLED.clear();
+}
+
+void button_pressed(){
+  if((millis() - last_interrupt) > DEBOUNCE_TIME && !digitalRead(BUTTON_PIN_IN)){
+      running_debounce = true;
+      last_interrupt = millis(); 
+  }
 }
