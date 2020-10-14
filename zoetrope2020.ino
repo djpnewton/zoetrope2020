@@ -29,8 +29,12 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
-#define STEPPER_INTERVAL    (1000000/1036) // 1036hz
-#define STEPPER_PULSE       10             // 10us
+#define STEPPER_INTERVAL_START  (1000000/10)   // 10hz          
+#define STEPPER_INTERVAL_TARGET (1000000/1036) // 1036hz
+#define STEPPER_UPDATE_INTERVAL 1000
+#define STEPPER_RAMP_FIXED      10
+#define STEPPER_RAMP_DAMP       50
+#define STEPPER_PULSE           10             // 10us
 
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       1
@@ -53,8 +57,10 @@ CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 enum anim_mode_t mode = STOPPED;
 Metro eventAnim = Metro(1000);
+Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
 IntervalTimer intStepperOn;
 IntervalTimer intStepperOff;
+long stepperInterval = STEPPER_INTERVAL_START;
 char bleBuffer[100];
 
 volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
@@ -129,6 +135,11 @@ void loop() {
   }
   return;
   */
+
+  // update stepper
+  if (eventStepperUpdate.check() == 1) {
+    updateStepper();
+  }
   
   // run next animation frame
   if (eventAnim.check() == 1) {
@@ -180,15 +191,57 @@ void setupAnimation(void) {
 }
 
 void setupStepper(void) {
-  intStepperOn.begin(stepperOn, STEPPER_INTERVAL);
+  intStepperOn.begin(stepperOn, stepperInterval);
+}
+
+int stepperIntervalDelta() {
+  return STEPPER_RAMP_FIXED + (stepperInterval - STEPPER_INTERVAL_TARGET) / STEPPER_RAMP_DAMP;
+}
+
+void updateStepper(void) {
+  long delta = stepperIntervalDelta();
+  if (mode == STOPPED) {
+    // update stepper interval until we have spooled down to slow
+    if (stepperInterval != STEPPER_INTERVAL_START) {
+      stepperInterval = stepperInterval + delta;
+      if (stepperInterval >= STEPPER_INTERVAL_START - delta) {
+        stepperInterval = STEPPER_INTERVAL_START;
+        Serial.println("Stepper at slow speed");
+      } else {
+        Serial.print("Stepper interval at ");
+        Serial.print(stepperInterval);
+        Serial.println("us");
+      }
+      intStepperOn.update(stepperInterval);
+    }    
+  } else {
+    // update stepper interval until we have spooled up to full speed
+    if (stepperInterval != STEPPER_INTERVAL_TARGET) {
+      stepperInterval = stepperInterval - delta;
+      if (stepperInterval <= STEPPER_INTERVAL_TARGET + delta) {
+        stepperInterval = STEPPER_INTERVAL_TARGET;
+        Serial.println("Stepper at full speed");
+      } else {
+        Serial.print("Stepper interval at ");
+        Serial.print(stepperInterval);
+        Serial.println("us");
+      }
+      intStepperOn.update(stepperInterval);
+    }
+  }
 }
 
 void stepperOn(void) {
+  // dont step if we are in stopped mode and spoolled down
+  if (mode == STOPPED && stepperInterval == STEPPER_INTERVAL_START)
+    return;
+  // start stepper pulse
   intStepperOff.begin(stepperOff, STEPPER_PULSE);
   digitalWrite(STEPPER_PIN_OUT, HIGH);
 }
 
 void stepperOff(void) {
+  // finish stepper pulse
   intStepperOff.end();
   digitalWrite(STEPPER_PIN_OUT, LOW);  
 }
