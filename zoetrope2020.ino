@@ -13,7 +13,7 @@
 
 #include "rn4870.h"
 
-#define DEBUG_STRIP_LOCATION
+//#define DEBUG_STRIP_LOCATION
 
 /********************************** FastLED and Hardware Config *************************************/
 #define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
@@ -67,7 +67,7 @@ CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 #ifdef DEBUG_STRIP_LOCATION
 int stripIndex = 0;
-#elif
+#else
 enum anim_mode_t mode = STOPPED;
 #endif
 Metro eventAnim = Metro(1000);
@@ -175,7 +175,7 @@ void loop() {
       last_interrupt = millis();
 #ifdef DEBUG_STRIP_LOCATION
       stripIndex++;
-#elif
+#else
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
 #endif
       setupAnimation();
@@ -192,7 +192,7 @@ void setupAnimation(void) {
   Serial.print("STRIP INDEX: ");
   Serial.print(stripIndex);
   Serial.println();
-#elif
+#else
   switch (mode) {
     case STOPPED:
       Serial.println("STOPPED");
