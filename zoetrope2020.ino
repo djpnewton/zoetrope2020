@@ -118,7 +118,7 @@ void setup() {
   digitalWrite(TIMING_PIN_OUT, LOW);
   
   // FastLED
-  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER, DATA_RATE_MHZ(25)> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER, DATA_RATE_MHZ(18)> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(GLOBAL_BRIGHTNESS);
 
   // events
