@@ -29,12 +29,15 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
+#define STEPPER_MICROSTEPS      2
 #define STEPPER_INTERVAL_START  (1000000/10)   // 10hz          
-#define STEPPER_INTERVAL_TARGET (1000000/1036) // 1036hz
+#define STEPPER_INTERVAL_TARGET (1000000/(1036*STEPPER_MICROSTEPS)) // 1036hz
 #define STEPPER_UPDATE_INTERVAL 1000
 #define STEPPER_RAMP_FIXED      10
 #define STEPPER_RAMP_DAMP       50
 #define STEPPER_PULSE           10             // 10us
+
+#define BUTTON_DEBOUNCE_TIME 50 // How long to debounce for
 
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       1
@@ -65,7 +68,6 @@ char bleBuffer[100];
 
 volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
 volatile bool running_debounce = false; // Whether the debounce is being checked (To avoid resetting the start of debounce, if the interrupt repeatedly triggers)
-#define DEBOUNCE_TIME 150 // How long to debounce for
 
 /************************************* Setup + Main + Functions *************************************/
 
@@ -155,7 +157,7 @@ void loop() {
       Serial.write(ble_rn4870.getLastAnswer());
   }
   */
-  if (running_debounce && ((millis() - last_interrupt) > DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
+  if (running_debounce && ((millis() - last_interrupt) > BUTTON_DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
       running_debounce = false;
       last_interrupt = millis();
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
@@ -370,7 +372,7 @@ void ledsClear(void) {
 }
 
 void button_pressed(){
-  if((millis() - last_interrupt) > DEBOUNCE_TIME && !digitalRead(BUTTON_PIN_IN)){
+  if((millis() - last_interrupt) > BUTTON_DEBOUNCE_TIME && !digitalRead(BUTTON_PIN_IN)){
       running_debounce = true;
       last_interrupt = millis(); 
   }
