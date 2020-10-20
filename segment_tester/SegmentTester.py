@@ -163,8 +163,9 @@ def ser_stop():
 # -------- #
 
 class Commands(Enum):
-    DEBUG_SEGMENT = 0
-    ANIMATION_MODE = 1
+    STOP = 0
+    DEBUG_SEGMENT = 1
+    ANIMATION_MODE = 2
 
 def build_command(cmd_type = Commands.DEBUG_SEGMENT, command_vals=[None]):
     
@@ -173,10 +174,7 @@ def build_command(cmd_type = Commands.DEBUG_SEGMENT, command_vals=[None]):
     global awaiting_command_response
 
     construct_command = bytearray()
-    if cmd_type == Commands.DEBUG_SEGMENT:
-        construct_command.append(0x0)
-    elif cmd_type == Commands.ANIMATION_MODE:
-        construct_command.append(0x1)
+    construct_command.append(cmd_type.value)
     
     if len(command_vals) > 0:
         for val in command_vals:
@@ -257,6 +255,19 @@ def toggle_start_button():
 start_button = ttk.Button(serialFrame.frame, text="Start", command = ser_start)
 start_button.grid(row=2, column=0, columnspan=2, sticky=W+E+N+S, pady=5)
 
+# ------------- #
+#  STOP WINDOW  #
+# ------------- #
+
+class StopTypes(Enum):
+    ALL_STOP = 0
+    LED_STOP = 1
+    MOTOR_STOP = 2
+
+stopFrame = SectionFrame("STOP!", 0, 1, 2)
+allStopButton = ttk.Button(stopFrame.frame, text="All Stop!", command = lambda: build_command(cmd_type=Commands.STOP, command_vals=[StopTypes.ALL_STOP.value]))
+allStopButton.grid(column=0, row=0, columnspan=2, rowspan=2)
+
 # ---------------- #
 #  COMMAND WINDOW  #
 # ---------------- #
@@ -264,6 +275,10 @@ start_button.grid(row=2, column=0, columnspan=2, sticky=W+E+N+S, pady=5)
 CommandFrame = SectionFrame("Commands", 1, 0, 2)
 animation_mode_selected = StringVar()
 animation_modes = ()
+
+# -------------- #
+#  DEBUG WINDOW  #
+# -------------- #
 
 CalibrationFrame = SectionFrame("Debug", 2, 0, 2)
 
