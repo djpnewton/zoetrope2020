@@ -26,6 +26,7 @@ try:
 except:
     print(ERROR_PREFIX + "PySerial is not installed on your system")
 
+from enum import Enum
 
 # --------------------------- #
 # Global Variable Decleration #
@@ -37,12 +38,22 @@ serial_connected = False
 # if the serial connection needs to start
 run_serial = False
 
-
-# This variable does something
-readin_glob = 0
-
 # Default baud speed. And yes, WE ARE RUNNING WELL OVER 9000!
 default_baud = 19200
+
+# Command to send
+command_to_send = []
+
+# If there is a command that needs to be sent
+has_command = False
+
+# Serial response data
+command_response = []
+
+# Waiting for response
+awaiting_command_response = False
+
+PAD_SIZE = 8
 
 # ------------------- #
 #  FIND SERIAL PORTS  #
@@ -147,6 +158,39 @@ def ser_stop():
     serial_connected = False
 
 
+# -------- #
+# Commands #
+# -------- #
+
+class Commands(Enum):
+    DEBUG_SEGMENT = 0
+    ANIMATION_MODE = 1
+
+def build_command(cmd_type = Commands.DEBUG_SEGMENT, command_vals=[None]):
+    
+    global command_to_send
+    global has_command
+    global awaiting_command_response
+
+    construct_command = bytearray()
+    if cmd_type == Commands.DEBUG_SEGMENT:
+        construct_command.append(0x0)
+    elif cmd_type == Commands.ANIMATION_MODE:
+        construct_command.append(0x1)
+    
+    if len(command_vals) > 0:
+        for val in command_vals:
+            construct_command.append(val)
+    command_to_send = construct_command
+    
+    for i in range(0, PAD_SIZE - len(command_to_send)):
+        command_to_send.append(0x0)
+
+    print("Command: {}".format(str(command_to_send)))
+    has_command = True
+    awaiting_command_response = True
+
+
 # |---------------------------------|
 # |--#############################--|
 # |             TKINTER             |
@@ -217,19 +261,33 @@ start_button.grid(row=2, column=0, columnspan=2, sticky=W+E+N+S, pady=5)
 #  COMMAND WINDOW  #
 # ---------------- #
 
-CalibrationFrame = SectionFrame("Debug", 1, 0, 2)
+CommandFrame = SectionFrame("Commands", 1, 0, 2)
+animation_mode_selected = StringVar()
+animation_modes = ()
+
+CalibrationFrame = SectionFrame("Debug", 2, 0, 2)
 
 # Segment Debugging
-segment_selected = StringVar()
+segment_selected = IntVar()
 segments = tuple(range(0, 24))
+segment_selected.set(segments[0])
 segments_dropdown = ttk.OptionMenu(CalibrationFrame.frame, segment_selected, "", *segments)
 segments_dropdown.grid(row=1, column=1, sticky=W+E+N+S)
 print(segment_selected.get())
 Label(CalibrationFrame.frame, text="Segment: ").grid(row=1)
 
-segment_reverse = IntVar()
-segment_reverse_checkbox = Checkbutton(CalibrationFrame.frame, text="Reverse Segment", variable=segment_reverse, onvalue="1", offvalue="0")
+segment_reverse = StringVar(value="f")
+segment_reverse_checkbox = Checkbutton(CalibrationFrame.frame, text="Reverse Segment", variable=segment_reverse, onvalue="r", offvalue="f")
 segment_reverse_checkbox.grid(row=1, column=2)
+
+send_segment_command = ttk.Button(CalibrationFrame.frame, text="Send Command", command = lambda: build_command(cmd_type=Commands.DEBUG_SEGMENT, command_vals=[segment_selected.get()]))
+send_segment_command.grid(row=1, column=3)
+
+# Commands
+# deb // Debug command
+#       -s "n" // Debug segment number
+#               "-f" or "-r"  // direction of segment
+
 
 
 # ------------------- #
@@ -238,6 +296,11 @@ segment_reverse_checkbox.grid(row=1, column=2)
 
 def main():
 
+    global awaiting_command_response
+    global command_response
+    global has_command
+    global command_to_send
+
     while True:
         
         found_beginning = False
@@ -245,9 +308,19 @@ def main():
         if run_serial is True:
 
             try:
+
                 while ser.in_waiting > 0:
-                    readin = ser.readline().strip().decode('ascii')
-                    print(readin)
+                    command_response = ser.read(8)
+                    print("ECHO: " + str(command_response))
+
+                if awaiting_command_response and (command_response == command_to_send):
+                    awaiting_command_response = False
+                    command_response = ""
+                if has_command and awaiting_command_response:
+                    print("Writing Command")
+                    ser.write(command_to_send)
+                    has_command = False
+                    print("Written Command")
                     
             except Exception as ex:
                 # Print Exception
