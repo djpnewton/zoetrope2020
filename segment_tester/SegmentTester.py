@@ -39,7 +39,7 @@ serial_connected = False
 run_serial = False
 
 # Default baud speed. And yes, WE ARE RUNNING WELL OVER 9000!
-default_baud = 19200
+default_baud = 115200
 
 # Command to send
 command_to_send = []
@@ -241,18 +241,18 @@ baud_spinbox.grid(row=1, column=0, sticky=W+E+N+S)
 print(baud_selected.get())
 
 # Create a reset button
-serial_reset_button = ttk.Button(serialFrame.frame, text="Reset", command=reset_serial_baud)
+serial_reset_button = ttk.Button(serialFrame.frame, text="Reset Baudrate", command=reset_serial_baud)
 serial_reset_button.grid(row=1, column=1, sticky=W+E+N+S)
 
 # Toggle function for start/stop button
 def toggle_start_button():
-    if start_button["text"] == "Start": # serial is not being read
-        start_button.config(text="Stop", command=ser_stop)
+    if start_button["text"] == "Connect": # serial is not being read
+        start_button.config(text="Disconnect", command=ser_stop)
     else: # serial is being read
-        start_button.config(text="Start", command=ser_start)
+        start_button.config(text="Connect", command=ser_start)
 
 #Create start/stop button
-start_button = ttk.Button(serialFrame.frame, text="Start", command = ser_start)
+start_button = ttk.Button(serialFrame.frame, text="Connect", command = ser_start)
 start_button.grid(row=2, column=0, columnspan=2, sticky=W+E+N+S, pady=5)
 
 # ------------- #
@@ -295,7 +295,7 @@ segment_reverse = StringVar(value="f")
 segment_reverse_checkbox = Checkbutton(CalibrationFrame.frame, text="Reverse Segment", variable=segment_reverse, onvalue="r", offvalue="f")
 segment_reverse_checkbox.grid(row=1, column=2)
 
-send_segment_command = ttk.Button(CalibrationFrame.frame, text="Send Command", command = lambda: build_command(cmd_type=Commands.DEBUG_SEGMENT, command_vals=[segment_selected.get()]))
+send_segment_command = ttk.Button(CalibrationFrame.frame, text="Send Command", command = lambda: build_command(cmd_type=Commands.DEBUG_SEGMENT, command_vals=[0 if segment_reverse.get() == "f" else 1, segment_selected.get()]))
 send_segment_command.grid(row=1, column=3)
 
 # Commands
@@ -323,19 +323,19 @@ def main():
         if run_serial is True:
 
             try:
-
                 while ser.in_waiting > 0:
                     command_response = ser.read(8)
-                    print("ECHO: " + str(command_response))
-
-                if awaiting_command_response and (command_response == command_to_send):
-                    awaiting_command_response = False
-                    command_response = ""
+                    
+                    if awaiting_command_response and (command_response == command_to_send):
+                        print("ECHO: " + str(command_response))
+                        awaiting_command_response = False
+                        command_response = ""
+                    elif command_response == bytearray([255,255,255,255,255,255,255,255]):
+                        print("Msg: {}".format(ser.readline().strip().decode('ascii')))
                 if has_command and awaiting_command_response:
-                    print("Writing Command")
                     ser.write(command_to_send)
+                    print("SENT: {}".format(str(command_to_send)))
                     has_command = False
-                    print("Written Command")
                     
             except Exception as ex:
                 # Print Exception
