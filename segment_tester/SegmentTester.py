@@ -234,7 +234,7 @@ def reset_serial_baud():
 
 # Create a baudrate selector
 baud_selected = StringVar()
-standard_baud = (50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200) # possible baudrates
+standard_baud = (50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 500000) # possible baudrates
 baud_spinbox = Spinbox(serialFrame.frame, textvariable=baud_selected, values=standard_baud, validate="all", state="readonly")
 reset_serial_baud()
 baud_spinbox.grid(row=1, column=0, sticky=W+E+N+S)
@@ -331,7 +331,7 @@ def main():
                         awaiting_command_response = False
                         command_response = ""
                     elif command_response == bytearray([255,255,255,255,255,255,255,255]):
-                        print("Msg: {}".format(ser.readline().strip().decode('ascii')))
+                        print("Msg: {}".format(ser.readline().decode('ascii')))
                 if has_command and awaiting_command_response:
                     ser.write(command_to_send)
                     print("SENT: {}".format(str(command_to_send)))
