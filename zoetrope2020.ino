@@ -13,10 +13,14 @@
 
 #include "rn4870.h"
 
+#define DEBUG_STRIP_LOCATION
+
 /********************************** FastLED and Hardware Config *************************************/
-#define GLOBAL_BRIGHTNESS    200          // LED brightness (0-255), defines the LED PWM duty cycle
-#define NUM_LED_PER_STRIP   30         // Max LED Circuits under test (New boards have 20 per metre)
-#define NUM_STRIPS          8
+#define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
+#define NUM_LED_PER_STRIP   30          //
+#define NUM_STRIPS_PER_SECTOR 8
+#define NUM_SECTORS         3
+#define NUM_STRIPS          (NUM_STRIPS_PER_SECTOR*NUM_SECTORS)
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
@@ -29,8 +33,15 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
-#define STEPPER_INTERVAL    (1000000/1036) // 1036hz
-#define STEPPER_PULSE       10             // 10us
+#define STEPPER_MICROSTEPS      2
+#define STEPPER_INTERVAL_START  (1000000/10)   // 10hz          
+#define STEPPER_INTERVAL_TARGET (1000000/(1036*STEPPER_MICROSTEPS)) // 1036hz
+#define STEPPER_UPDATE_INTERVAL 1000
+#define STEPPER_RAMP_FIXED      10
+#define STEPPER_RAMP_DAMP       50
+#define STEPPER_PULSE           10             // 10us
+
+#define BUTTON_DEBOUNCE_TIME 50 // How long to debounce for
 
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       1
@@ -38,6 +49,8 @@
 
 /**************************************** Definitions ***********************************************/
 
+#ifdef DEBUG_STRIP_LOCATION
+#else
 enum anim_mode_t {
     STOPPED = 0,
     ANIM_MOVING_DOT = 1,
@@ -45,21 +58,27 @@ enum anim_mode_t {
     ANIM_HUECYCLE = 3,
     ANIM_PALETTESHIFT = 4
 };
+#endif
 
 /**************************************** Global Variables ******************************************/
 
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
+#ifdef DEBUG_STRIP_LOCATION
+int stripIndex = 0;
+#elif
 enum anim_mode_t mode = STOPPED;
+#endif
 Metro eventAnim = Metro(1000);
+Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
 IntervalTimer intStepperOn;
 IntervalTimer intStepperOff;
+long stepperInterval = STEPPER_INTERVAL_START;
 char bleBuffer[100];
 
 volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
 volatile bool running_debounce = false; // Whether the debounce is being checked (To avoid resetting the start of debounce, if the interrupt repeatedly triggers)
-#define DEBOUNCE_TIME 150 // How long to debounce for
 
 /************************************* Setup + Main + Functions *************************************/
 
@@ -104,7 +123,9 @@ void setup() {
 
   // events
   setupAnimation();
+#ifndef DEBUG_STRIP_LOCATION
   setupStepper();
+#endif
 
   // ble
   //setupBle();
@@ -112,7 +133,7 @@ void setup() {
 
   // serial
   Serial.begin(115200);
-  Serial.println("Started");
+  Serial.println("Initialised serial");
 }
 
 void loop() {
@@ -129,6 +150,11 @@ void loop() {
   }
   return;
   */
+
+  // update stepper
+  if (eventStepperUpdate.check() == 1) {
+    updateStepper();
+  }
   
   // run next animation frame
   if (eventAnim.check() == 1) {
@@ -144,10 +170,14 @@ void loop() {
       Serial.write(ble_rn4870.getLastAnswer());
   }
   */
-  if (running_debounce && ((millis() - last_interrupt) > DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
+  if (running_debounce && ((millis() - last_interrupt) > BUTTON_DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
       running_debounce = false;
       last_interrupt = millis();
+#ifdef DEBUG_STRIP_LOCATION
+      stripIndex++;
+#elif
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
+#endif
       setupAnimation();
   }
 }
@@ -155,7 +185,14 @@ void loop() {
 void setupAnimation(void) {
   eventAnim.interval(FRAME_INTERVAL);
   eventAnim.reset();
-  
+
+#ifdef DEBUG_STRIP_LOCATION
+  if (stripIndex >= NUM_STRIPS)
+    stripIndex = 0;
+  Serial.print("STRIP INDEX: ");
+  Serial.print(stripIndex);
+  Serial.println();
+#elif
   switch (mode) {
     case STOPPED:
       Serial.println("STOPPED");
@@ -177,20 +214,69 @@ void setupAnimation(void) {
       setupAnimation();
       break;
   }
+#endif
 }
 
 void setupStepper(void) {
-  intStepperOn.begin(stepperOn, STEPPER_INTERVAL);
+  intStepperOn.begin(stepperOn, stepperInterval);
+}
+
+int stepperIntervalDelta() {
+  return STEPPER_RAMP_FIXED + (stepperInterval - STEPPER_INTERVAL_TARGET) / STEPPER_RAMP_DAMP;
+}
+
+void updateStepper(void) {
+#ifndef DEBUG_STRIP_LOCATION
+  long delta = stepperIntervalDelta();
+  if (mode == STOPPED) {
+    // update stepper interval until we have spooled down to slow
+    if (stepperInterval != STEPPER_INTERVAL_START) {
+      stepperInterval = stepperInterval + delta;
+      if (stepperInterval >= STEPPER_INTERVAL_START - delta) {
+        stepperInterval = STEPPER_INTERVAL_START;
+        Serial.println("Stepper at slow speed");
+      } else {
+        Serial.print("Stepper interval at ");
+        Serial.print(stepperInterval);
+        Serial.println("us");
+      }
+      intStepperOn.update(stepperInterval);
+    }    
+  } else {
+    // update stepper interval until we have spooled up to full speed
+    if (stepperInterval != STEPPER_INTERVAL_TARGET) {
+      stepperInterval = stepperInterval - delta;
+      if (stepperInterval <= STEPPER_INTERVAL_TARGET + delta) {
+        stepperInterval = STEPPER_INTERVAL_TARGET;
+        Serial.println("Stepper at full speed");
+      } else {
+        Serial.print("Stepper interval at ");
+        Serial.print(stepperInterval);
+        Serial.println("us");
+      }
+      intStepperOn.update(stepperInterval);
+    }
+  }
+#endif
 }
 
 void stepperOn(void) {
+#ifndef DEBUG_STRIP_LOCATION
+  // dont step if we are in stopped mode and spoolled down
+  if (mode == STOPPED && stepperInterval == STEPPER_INTERVAL_START)
+    return;
+  // start stepper pulse
   intStepperOff.begin(stepperOff, STEPPER_PULSE);
   digitalWrite(STEPPER_PIN_OUT, HIGH);
+#endif
 }
 
 void stepperOff(void) {
+#ifndef DEBUG_STRIP_LOCATION
+  // finish stepper pulse
   intStepperOff.end();
   digitalWrite(STEPPER_PIN_OUT, LOW);  
+#endif
 }
 
 void setupBle(void) {
@@ -221,9 +307,11 @@ void animationCancel(void) {
 }
 
 void animationFrame(void) {
+#ifdef DEBUG_STRIP_LOCATION
+  movingDotDebug(stripIndex);
+#else
   digitalWrite(TIMING_PIN_OUT, HIGH);
-  
-  switch (mode) {
+    switch (mode) {
     case STOPPED:
       break;
     case ANIM_MOVING_DOT:
@@ -239,10 +327,26 @@ void animationFrame(void) {
       paletteShift();
       break;
   }
+#endif
   //delay(1);
   ledsClear();
 
   digitalWrite(TIMING_PIN_OUT, LOW);
+}
+
+void movingDotDebug(int stripIndex) {
+  static int stripDot = 0;
+  int dot = stripIndex * NUM_LED_PER_STRIP + stripDot;
+  // set all black
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  // set dot
+  leds[dot] = CRGB(255, 0, 0);
+  // increment dot for next time
+  stripDot++;
+  if (stripDot >= NUM_LED_PER_STRIP)
+    stripDot = 0;
+  // show leds
+  FastLED.show();
 }
 
 void movingDot(void) {
@@ -316,8 +420,8 @@ void ledsClear(void) {
   //FastLED.clear();
 }
 
-void button_pressed(){
-  if((millis() - last_interrupt) > DEBOUNCE_TIME && !digitalRead(BUTTON_PIN_IN)){
+void button_pressed(void) {
+  if((millis() - last_interrupt) > BUTTON_DEBOUNCE_TIME && !digitalRead(BUTTON_PIN_IN)){
       running_debounce = true;
       last_interrupt = millis(); 
   }
