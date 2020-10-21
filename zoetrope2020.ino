@@ -13,7 +13,7 @@
 
 #include "rn4870.h"
 
-#define DEBUG_STRIP_LOCATION
+//#define DEBUG_STRIP_LOCATION
 
 /********************************** FastLED Config *************************************/
 #define GLOBAL_BRIGHTNESS    230          // LED brightness (0-255), defines the LED PWM duty cycle
@@ -404,11 +404,13 @@ void animationFrame(void) {
     case ANIM_PALETTESHIFT:
       paletteShift();
       break;
+    case ANIM_DEBUG_SEGMENT:
+      movingDotDebug(stripIndex);
   }
   //delay(1);
   ledsClear();
 
-  digitalWrite(TIMING_PIN_OUT, LOW);
+  //digitalWrite(TIMING_PIN_OUT, LOW);
 }
 
 void movingDotDebug(int stripIndex, bool dir) {
