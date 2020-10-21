@@ -58,10 +58,11 @@ enum serial_cmd_t {
 enum anim_mode_t {
     STOPPED = 0,
     ANIM_MOVING_DOT = 1,
-    ANIM_STATIC_RGB = 2,
-    ANIM_HUECYCLE = 3,
-    ANIM_PALETTESHIFT = 4,
-    ANIM_STATIC_LOOPS = 5,
+    ANIM_FILL_LOOPS = 2,
+    ANIM_STATIC_RGB = 3,
+    ANIM_HUECYCLE = 4,
+    ANIM_PALETTESHIFT = 5,
+    ANIM_STATIC_LOOPS = 6,
     ANIM_DEBUG_SEGMENT = 10, // only accessable from serial command, not the button
 };
 #endif
@@ -266,6 +267,9 @@ void setupAnimation(void) {
     case ANIM_MOVING_DOT:
       Serial.println("ANIM_MOVING_DOT");
       break;
+    case ANIM_FILL_LOOPS:
+      Serial.println("ANIM_FILL_LOOPS");
+      break;
     case ANIM_STATIC_RGB:
       Serial.println("ANIM_STATIC_RGB");
       break;
@@ -397,6 +401,9 @@ void animationFrame(void) {
     case ANIM_MOVING_DOT:
       movingDot();
       break;
+    case ANIM_FILL_LOOPS:
+      fillLoops();
+      break;
     case ANIM_STATIC_RGB:
       staticRGB();
       break;
@@ -482,6 +489,51 @@ void movingDot(void) {
     dot++;
     if (dot >= NUM_LEDS_PER_LOOP){
       dot = 0;
+    }
+    dots[i] = dot;
+  }
+  // show leds
+  FastLED.show();
+}
+
+void fillLoops(void) {
+  static uint8_t hues[NUM_LOOPS] = {0};
+  static int dots[NUM_LOOPS] = {0};
+  static bool filling[NUM_LOOPS] = {0};
+  // init hues and dot indexs
+  bool needInit = true;
+  for (int i=0; i<NUM_LOOPS; i++)
+    if (hues[i] != 0)
+      needInit = false;
+  if (needInit) {
+    for (int i=0; i<NUM_LOOPS; i++) {
+      hues[i] = i * 256/NUM_LOOPS;
+      dots[i] = 0;
+      filling[i] = true;
+    } 
+  }
+  // set dots to current hue
+  for (int i=0; i<NUM_LOOPS; i++) {
+    int dot = dots[i];
+    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(j, i);
+      if (filling[i]) {
+        if (j <= dot)
+          leds[logicalLedIndex] = CHSV(hues[i]/*++*/, 255, 255);
+        else
+          leds[logicalLedIndex] = CRGB(0, 0, 0);
+      } else {
+        if (j > dot)
+          leds[logicalLedIndex] = CHSV(hues[i]/*++*/, 255, 255);
+        else
+          leds[logicalLedIndex] = CRGB(0, 0, 0);        
+      }
+    }
+    // update dot index for next time
+    dot++;
+    if (dot >= NUM_LEDS_PER_LOOP) {
+      dot = 0;
+      filling[i] = !filling[i];
     }
     dots[i] = dot;
   }
