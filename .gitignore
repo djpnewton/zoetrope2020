@@ -33,3 +33,5 @@
 
 # Python
 env
+segment_tester/addresses.txt
+segment_tester/led_order_in_use.csv
