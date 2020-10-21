@@ -70,7 +70,6 @@ enum anim_mode_t {
 
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
-CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 int stripIndex = 0;
 #ifndef DEBUG_STRIP_LOCATION
 enum anim_mode_t mode = STOPPED;
@@ -104,11 +103,6 @@ void setup() {
     led_failsafe = true;
   if (ILLUMINATION_TIME > 5)
     led_failsafe = true;
-  
-  // init loops array of indexes into leds buffer
-  for (int i=0; i<NUM_LOOPS; i++) {
-    loops[i] = leds + i * NUM_LEDS_PER_LOOP;
-  }
 
   // GPIO stepper
   pinMode(STEPPER_PIN_OUT, OUTPUT);
@@ -123,7 +117,7 @@ void setup() {
   digitalWrite(TIMING_PIN_OUT, LOW);
   
   // FastLED
-  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER, DATA_RATE_MHZ(18)> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  FastLED.addLeds<LED_TYPE, DATA_PIN1, CLOCK_PIN1, COLOUR_ORDER, DATA_RATE_MHZ(14)> (leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(GLOBAL_BRIGHTNESS);
 
   // events
@@ -442,7 +436,7 @@ void movingDotDebug(int stripIndex) {
 
 void staticColorLoops(void) {
   static uint8_t hues[NUM_LOOPS] = {0};
-  // init hues and dot indexs
+  // init hues
   bool needInit = true;
   for (int i=0; i<NUM_LOOPS; i++)
     if (hues[i] != 0)
@@ -456,7 +450,7 @@ void staticColorLoops(void) {
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j < NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
-      leds[logicalLedIndex] = hues[i];
+      leds[logicalLedIndex] = CHSV(hues[i], 255, 255);
     }
   }
   // show leds
@@ -474,13 +468,14 @@ void movingDot(void) {
   if (needInit) {
     for (int i=0; i<NUM_LOOPS; i++) {
       hues[i] = i * 256/NUM_LOOPS;
-      dots[i] = i * NUM_LEDS_PER_LOOP/NUM_LOOPS;
+      dots[i] = 0;
     } 
   }
   // set dots to current hue
   for (int i=0; i<NUM_LOOPS; i++) {
     int dot = dots[i];
-    loops[i][dot] = CHSV(hues[i]++, 255, 255);
+    int logicalLedIndex = XYsafe(dot, i);
+    leds[logicalLedIndex] = CHSV(hues[i]/*++*/, 255, 255);
     // update dot index for next time
     dot++;
     if (dot >= NUM_LEDS_PER_LOOP)
@@ -519,8 +514,9 @@ void paletteShift(void) {
   );
   CRGBPalette16 palettes[NUM_LOOPS] = {red_blue_red, PartyColors_p, OceanColors_p, LavaColors_p};
   for (int i=0; i<NUM_LOOPS; i++) {
-    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {   
-      loops[i][j] = ColorFromPalette(palettes[i], j + offset);
+    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(j, i);
+      leds[logicalLedIndex] = ColorFromPalette(palettes[i], j + offset);
     }
   }
   offset++;
