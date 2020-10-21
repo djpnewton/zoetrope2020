@@ -1,5 +1,5 @@
 /* Project: Zoetrope
- * Author: Damon Partington, Daniel Newton
+ * Author: Damon Partington, Daniel Newton, Liam Twentyman
  * Created: 2020-08-02
  * Updated: 2020-08-17
  * Overview: 
@@ -15,7 +15,7 @@
 
 #define DEBUG_STRIP_LOCATION
 
-/********************************** FastLED and Hardware Config *************************************/
+/********************************** FastLED Config *************************************/
 #define GLOBAL_BRIGHTNESS    230          // LED brightness (0-255), defines the LED PWM duty cycle
 #define NUM_LED_PER_STRIP   30          //
 #define NUM_STRIPS_PER_SECTOR 8
@@ -24,6 +24,49 @@
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
+
+// |---------------------------------------|
+// | Code to address LEDS in a matrix form |
+// |---------------------------------------|
+
+// Params for width and height
+const uint8_t kMatrixWidth = 180;
+const uint8_t kMatrixHeight = 4;
+
+#define LAST_VISIBLE_LED 719
+uint16_t XY (uint16_t x, uint16_t y) {
+  // any out of bounds address maps to the first hidden pixel
+  if ( (x >= kMatrixWidth) || (y >= kMatrixHeight) ) {
+    return (LAST_VISIBLE_LED + 1);
+  }
+
+  const uint16_t XYTable[] = {
+    0,1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29
+    59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33,32,31,30,
+    60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,
+    119,118,117,116,115,114,113,112,111,110,109,108,107,106,105,104,103,102,101,100,99,98,97,96,95,94,93,92,91,90
+
+  };
+
+  uint16_t i = (y * kMatrixWidth) + x;
+  uint16_t j = XYTable[i];
+  return j;
+}
+
+
+bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
+
+CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
+CRGB leds_plus_safety_pixel[ NUM_LEDS + 1];
+CRGB* const leds( leds_plus_safety_pixel + 1);         // LED Output Buffer
+
+uint16_t XYsafe( uint8_t x, uint8_t y)
+{
+  if( x >= kMatrixWidth) return -1;
+  if( y >= kMatrixHeight) return -1;
+  return XY(x,y);
+}
+
 #define DATA_PIN1           11          // MOSI PIN
 #define CLOCK_PIN1          13          // SCK PIN
 #define LED_TYPE            LPD8806     // SPI Chipset LPD8806 (Same as 2019 Zoetrope)
@@ -33,6 +76,8 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
+
+/********************************** Hardware Config *************************************/
 #define STEPPER_MICROSTEPS      2
 #define STEPPER_INTERVAL_START  (1000000/10)   // 10hz          
 #define STEPPER_INTERVAL_TARGET (1000000/(1036*STEPPER_MICROSTEPS)) // 1036hz
@@ -65,6 +110,7 @@ CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
 int stripIndex = 0;
 bool stripDirection = true;
+
 enum anim_mode_t mode = STOPPED;
 Metro eventAnim = Metro(1000);
 Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
@@ -400,7 +446,7 @@ void movingDot(void) {
   // set dots to current hue
   for (int i=0; i<NUM_LOOPS; i++) {
     int dot = dots[i];
-    loops[i][dot] = CHSV(hues[i]++, 255, 255);
+    leds[ XYsafe(dot, i)] = CHSV(hues[i]++, 255, 255);
     // update dot index for next time
     dot++;
     if (dot >= NUM_LEDS_PER_LOOP)
@@ -440,7 +486,7 @@ void paletteShift(void) {
   CRGBPalette16 palettes[NUM_LOOPS] = {red_blue_red, PartyColors_p, OceanColors_p, LavaColors_p};
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {   
-      loops[i][j] = ColorFromPalette(palettes[i], j + offset);
+      leds[XYsafe(j, i)] = ColorFromPalette(palettes[i], j + offset);
     }
   }
   offset++;
