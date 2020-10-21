@@ -468,10 +468,12 @@ void movingDot(void) {
   static uint8_t hues[NUM_LOOPS] = {0};
   static int dots[NUM_LOOPS] = {0};
   // init hues and dot indexs
-  bool needInit = true;
-  for (int i=0; i<NUM_LOOPS; i++)
-    if (hues[i] != 0)
-      needInit = false;
+  bool needInit = false;
+  for (int i=0; i<NUM_LOOPS; i++) {
+    if (hues[i] == 0) {
+      needInit = true;
+    }
+ }
   if (needInit) {
     for (int i=0; i<NUM_LOOPS; i++) {
       hues[i] = i * 256/NUM_LOOPS;
@@ -485,8 +487,9 @@ void movingDot(void) {
     leds[logicalLedIndex] = CHSV(hues[i]/*++*/, 255, 255);
     // update dot index for next time
     dot++;
-    if (dot >= NUM_LEDS_PER_LOOP)
+    if (dot >= NUM_LEDS_PER_LOOP) {
       dot = 0;
+    }
     dots[i] = dot;
   }
   // show leds
