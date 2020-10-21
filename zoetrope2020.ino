@@ -24,6 +24,8 @@
 #define NUM_LEDS            (NUM_LED_PER_STRIP * NUM_STRIPS)
 #define NUM_LOOPS            4
 #define NUM_LEDS_PER_LOOP   (NUM_LEDS/NUM_LOOPS)
+#define NUM_LEDS_X          (NUM_LEDS_PER_LOOP/2)
+#define NUM_LEDS_Y          (NUM_LOOPS*2)
 #define DATA_PIN1           11          // MOSI PIN
 #define CLOCK_PIN1          13          // SCK PIN
 #define LED_TYPE            LPD8806     // SPI Chipset LPD8806 (Same as 2019 Zoetrope)
@@ -33,9 +35,10 @@
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
+#define STEPPER_STEPS_PER_REV   1036
 #define STEPPER_MICROSTEPS      2
-#define STEPPER_INTERVAL_START  (1000000/10)   // 10hz          
-#define STEPPER_INTERVAL_TARGET (1000000/(1036*STEPPER_MICROSTEPS)) // 1036hz
+#define STEPPER_INTERVAL_START  (1000000/10)   // 10hz
+#define STEPPER_INTERVAL_TARGET (1000000/(STEPPER_STEPS_PER_REV*STEPPER_MICROSTEPS)) // 1036hz, 1 RPS
 #define STEPPER_UPDATE_INTERVAL 1000
 #define STEPPER_RAMP_FIXED      10
 #define STEPPER_RAMP_DAMP       50
@@ -63,6 +66,7 @@ enum anim_mode_t {
     ANIM_HUECYCLE = 4,
     ANIM_PALETTESHIFT = 5,
     ANIM_STATIC_LOOPS = 6,
+    ANIM_BUBBLES = 7,
     ANIM_DEBUG_SEGMENT = 10, // only accessable from serial command, not the button
 };
 #endif
@@ -282,6 +286,9 @@ void setupAnimation(void) {
     case ANIM_STATIC_LOOPS:
       Serial.println("ANIM_STATIC_LOOPS");
       break;
+    case ANIM_BUBBLES:
+      Serial.println("ANIM_BUBBLES");
+      break;
     default:
       mode = STOPPED;
       setupAnimation();
@@ -415,6 +422,9 @@ void animationFrame(void) {
       break;
     case ANIM_STATIC_LOOPS:
       staticColorLoops();
+      break;
+    case ANIM_BUBBLES:
+      bubbles();
       break;
     case ANIM_DEBUG_SEGMENT:
       movingDotDebug(stripIndex);
@@ -566,21 +576,165 @@ void hueCycle(void) {
 
 void paletteShift(void) {
   static uint8_t offset = 0;
-  static CRGBPalette16 red_blue_red = CRGBPalette16(
-   CRGB(255, 0, 0),
-   CRGB(0, 0, 255),
-   CRGB(255, 0, 0)
+  static CHSVPalette16 peach_with_white = CHSVPalette16(
+   CHSV(0, 255, 255),
+   CHSV(0, 25, 235),
+   CHSV(0, 255, 255)
   );
-  CRGBPalette16 palettes[NUM_LOOPS] = {red_blue_red, PartyColors_p, OceanColors_p, LavaColors_p};
+  static CHSVPalette16 purple_with_blue = CHSVPalette16(
+   CHSV(192, 255, 255),
+   CHSV(128, 255, 255),
+   CHSV(192, 255, 255)
+  );
+  CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
       leds[logicalLedIndex] = ColorFromPalette(palettes[i], j + offset);
     }
   }
-  offset++;
+  offset = offset + 4;
   FastLED.show();
 }
+
+//
+// Bubble animation
+//
+// TODO:
+// shift pattern backwards at same rate of rotation (should cause the pattern to curve in on itself)
+// 30 leds per strip, 3 sectors, so 3 * 30 = 90, 90 leds full rotation, 360/90 = 4 degrees per led
+// bubbles pulsing in size (4-8 led diameter), also color shifting? on a color shifting background?
+
+struct bubble_t {
+  uint8_t x, y, radius;  
+};
+
+float _x_transalation_required_per_step(void) {
+  int leds_per_circle = NUM_SECTORS * NUM_LED_PER_STRIP; // 90
+  int degrees_per_led = 360 / leds_per_circle;           // 4
+  int degrees_per_frame = 360 / FPS;                     // 360 / 24 = 15
+  return degrees_per_frame / degrees_per_led;            // 15 / 4 = 3.75 - 3, 4, 4, 4 ???
+}
+
+bool _xy_double_loop_to_bubblegrid(int* x, int* y) {
+  *y = *y * 2;
+  if (*x >= NUM_LEDS_X) {
+    *x = *x - NUM_LEDS_X;
+    *y = *y + 1;
+    return true;
+  }
+  return false;
+}
+
+int _x_translation(int x, bool next) {
+  //TODO: This needs work!!!
+  
+  // move to grid
+  int y = 0;
+  bool modified = _xy_double_loop_to_bubblegrid(&x, &y);
+  // get translation amount
+  static int c = 0;
+  int trans_x = 4;
+  if (c % 4 == 0)
+    trans_x = 3;
+  if (next)
+    c++;
+  // translate x
+  x = x - trans_x;
+  if (x < 0)
+    x = NUM_LEDS_X-1;
+  if (modified)
+    x = x + NUM_LEDS_X;
+  return x;
+}
+
+bool _5050(void) {
+  return random(0, 2) == 1;
+}
+
+void _move_bubbles(struct bubble_t* bubbles, int max_bubbles) {
+#define RAD_MIN 1
+#define RAD_MAX 4
+  for (int i=0; i < max_bubbles; i++) {
+    if (bubbles[i].radius == 0) {
+      // init bubble
+      bubbles[i].radius = random(RAD_MIN, RAD_MAX + 1);
+      bubbles[i].x = random(0, NUM_LEDS_X + 1);
+      bubbles[i].y = random(0, NUM_LEDS_Y + 1);
+    }
+    // change size
+    if (_5050()) {
+      if (bubbles[i].radius < RAD_MAX)
+        bubbles[i].radius++;
+    } else {
+      if (bubbles[i].radius > RAD_MIN)
+        bubbles[i].radius--;
+    }
+    // change x
+    if (_5050()) {
+      bubbles[i].x++;
+      if (bubbles[i].x >= NUM_LEDS_X)
+        bubbles[i].x = 0;
+    } else {
+      bubbles[i].x--;
+      if (bubbles[i].x >= NUM_LEDS_X)
+        bubbles[i].x = NUM_LEDS_X - 1;
+    }
+    // change y
+    if (_5050()) {
+      bubbles[i].y++;
+      if (bubbles[i].y >= NUM_LEDS_Y)
+        bubbles[1].y = 0;
+    } else {
+      bubbles[i].y--;
+      if (bubbles[i].y >= NUM_LEDS_Y)
+        bubbles[i].y = NUM_LEDS_Y - 1;
+    }
+  }
+}
+  
+bool _in_bubble(struct bubble_t* bubbles, int max_bubbles, int x, int y) {
+  _xy_double_loop_to_bubblegrid(&x, &y);
+  
+  for (int i=0; i < max_bubbles; i++) {
+    struct bubble_t* bubble = &bubbles[i];
+    int dx = abs(bubble->x - x);
+    int dy = abs(bubble->y - y);
+    if (dx + dy < bubble->radius)
+      return true;
+  }
+  return false;
+}
+
+void bubbles(void) {
+#define MAX_BUBBLES 4
+  static bubble_t bubbles[MAX_BUBBLES] = {0};
+  static uint8_t offset = 0;
+  static CHSVPalette16 peach_with_white = CHSVPalette16(
+   CHSV(0, 255, 255),
+   CHSV(0, 25, 235),
+   CHSV(0, 255, 255)
+  );
+  static CHSVPalette16 purple_with_blue = CHSVPalette16(
+   CHSV(192, 255, 255),
+   CHSV(128, 255, 255),
+   CHSV(192, 255, 255)
+  );
+  _move_bubbles(bubbles, MAX_BUBBLES);
+  for (int i=0; i<NUM_LOOPS; i++) {
+    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(/*_x_translation(j, (i==0 && j==0))*/j, i);
+      if (_in_bubble(bubbles, MAX_BUBBLES, i, j))
+        leds[logicalLedIndex] = ColorFromPalette(peach_with_white, j + offset);
+      else
+        leds[logicalLedIndex] = ColorFromPalette(purple_with_blue, j + offset);
+    }
+  }
+  offset = offset + 1;
+  FastLED.show();
+}
+
+
 
 void ledsClear(void) {
   // TODO: should just need clear!!
