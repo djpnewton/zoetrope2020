@@ -16,7 +16,7 @@
 #define DEBUG_STRIP_LOCATION
 
 /********************************** FastLED and Hardware Config *************************************/
-#define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
+#define GLOBAL_BRIGHTNESS    230          // LED brightness (0-255), defines the LED PWM duty cycle
 #define NUM_LED_PER_STRIP   30          //
 #define NUM_STRIPS_PER_SECTOR 8
 #define NUM_SECTORS         3
@@ -49,27 +49,23 @@
 
 /**************************************** Definitions ***********************************************/
 
-#ifdef DEBUG_STRIP_LOCATION
-#else
 enum anim_mode_t {
     STOPPED = 0,
-    ANIM_MOVING_DOT = 1,
-    ANIM_STATIC_RGB = 2,
-    ANIM_HUECYCLE = 3,
-    ANIM_PALETTESHIFT = 4
+    DEBUG = 1,
+    ANIM_MOVING_DOT = 2,
+    ANIM_STATIC_RGB = 3,
+    ANIM_HUECYCLE = 4,
+    ANIM_PALETTESHIFT = 5
 };
-#endif
 
 /**************************************** Global Variables ******************************************/
 
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
-#ifdef DEBUG_STRIP_LOCATION
 int stripIndex = 0;
-#elif
+bool stripDirection = true;
 enum anim_mode_t mode = STOPPED;
-#endif
 Metro eventAnim = Metro(1000);
 Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
 IntervalTimer intStepperOn;
@@ -80,6 +76,7 @@ char bleBuffer[100];
 volatile unsigned long last_interrupt = 0;  // Millis time of when the button was first registered as being pressed
 volatile bool running_debounce = false; // Whether the debounce is being checked (To avoid resetting the start of debounce, if the interrupt repeatedly triggers)
 
+byte command_read[8]; // Buffer a command is read into
 /************************************* Setup + Main + Functions *************************************/
 
 /*
@@ -123,19 +120,18 @@ void setup() {
 
   // events
   setupAnimation();
-#ifndef DEBUG_STRIP_LOCATION
   setupStepper();
-#endif
 
   // ble
   //setupBle();
   //Serial3.begin(115200);
 
   // serial
-  Serial.begin(115200);
+  Serial.begin(500000);
   Serial.println("Initialised serial");
 }
 
+bool has_command = false;
 void loop() {
   /*
   // read serial, write to serial3
@@ -151,6 +147,31 @@ void loop() {
   return;
   */
 
+  if (Serial.available() > 7){
+    send_plaintext("Have serial");
+    Serial.readBytes(command_read, 8);
+    Serial.write(command_read, 8);
+    has_command = true;
+  }
+
+  if(has_command){
+    has_command = false;
+    if(command_read[0] == 0){
+      mode = STOPPED;
+      setupAnimation();
+    }
+    else if(command_read[0] == 1){
+       if(command_read[1] == 0){
+        stripDirection = true;
+       } else {
+        stripDirection = false;
+       }
+       stripIndex = command_read[2];
+       mode = static_cast<enum anim_mode_t>(1);
+       setupAnimation();
+    }
+  }
+  
   // update stepper
   if (eventStepperUpdate.check() == 1) {
     updateStepper();
@@ -173,48 +194,64 @@ void loop() {
   if (running_debounce && ((millis() - last_interrupt) > BUTTON_DEBOUNCE_TIME) && !digitalRead(BUTTON_PIN_IN)) {
       running_debounce = false;
       last_interrupt = millis();
-#ifdef DEBUG_STRIP_LOCATION
-      stripIndex++;
-#elif
       mode = static_cast<enum anim_mode_t>(static_cast<int>(mode) + 1);
-#endif
       setupAnimation();
   }
+}
+
+void debugStrip(int strip){
+   if (stripIndex >= NUM_STRIPS){
+    send_plaintext("STRIP OUT OF BOUNDS");
+    stripIndex = 0;
+   } else {
+    String message = "STRIP INDEX: " + stripIndex;
+    send_plaintext(message);
+   }  
+}
+
+void debugStripPrintout(){
+  String startDot = "";
+  String endDot = "";
+  if(stripDirection){
+    startDot = String(stripIndex * NUM_LED_PER_STRIP);
+    endDot = String((stripIndex + 1) * NUM_LED_PER_STRIP - 1);
+  } else {
+    startDot = String((stripIndex + 1) * NUM_LED_PER_STRIP - 1);
+    endDot = String(stripIndex * NUM_LED_PER_STRIP);
+  }
+  String startMessage = "Start: " + startDot;
+  String endMessage = " End: " + endDot;
+  send_plaintext(startMessage + endMessage);
 }
 
 void setupAnimation(void) {
   eventAnim.interval(FRAME_INTERVAL);
   eventAnim.reset();
-
-#ifdef DEBUG_STRIP_LOCATION
-  if (stripIndex >= NUM_STRIPS)
-    stripIndex = 0;
-  Serial.print("STRIP INDEX: ");
-  Serial.print(stripIndex);
-  Serial.println();
-#elif
   switch (mode) {
     case STOPPED:
-      Serial.println("STOPPED");
+      send_plaintext("STOPPED");
+      break;
+    case DEBUG:
+      send_plaintext("DEBUG STRIP");
+      debugStripPrintout();      
       break;
     case ANIM_MOVING_DOT:
-      Serial.println("ANIM_MOVING_DOT");
+      send_plaintext("ANIM_MOVING_DOT");
       break;
     case ANIM_STATIC_RGB:
-      Serial.println("ANIM_STATIC_RGB");
+      send_plaintext("ANIM_STATIC_RGB");
       break;
     case ANIM_HUECYCLE:
-      Serial.println("ANIM_HUECYCLE");
+      send_plaintext("ANIM_HUECYCLE");
       break;
     case ANIM_PALETTESHIFT:
-      Serial.println("ANIM_PALETTESHIFT");
+      send_plaintext("ANIM_PALETTESHIFT");
       break;
     default:
       mode = STOPPED;
       setupAnimation();
       break;
   }
-#endif
 }
 
 void setupStepper(void) {
@@ -226,7 +263,6 @@ int stepperIntervalDelta() {
 }
 
 void updateStepper(void) {
-#ifndef DEBUG_STRIP_LOCATION
   long delta = stepperIntervalDelta();
   if (mode == STOPPED) {
     // update stepper interval until we have spooled down to slow
@@ -257,26 +293,21 @@ void updateStepper(void) {
       intStepperOn.update(stepperInterval);
     }
   }
-#endif
 }
 
 void stepperOn(void) {
-#ifndef DEBUG_STRIP_LOCATION
   // dont step if we are in stopped mode and spoolled down
   if (mode == STOPPED && stepperInterval == STEPPER_INTERVAL_START)
     return;
   // start stepper pulse
   intStepperOff.begin(stepperOff, STEPPER_PULSE);
   digitalWrite(STEPPER_PIN_OUT, HIGH);
-#endif
 }
 
 void stepperOff(void) {
-#ifndef DEBUG_STRIP_LOCATION
   // finish stepper pulse
   intStepperOff.end();
   digitalWrite(STEPPER_PIN_OUT, LOW);  
-#endif
 }
 
 void setupBle(void) {
@@ -307,12 +338,13 @@ void animationCancel(void) {
 }
 
 void animationFrame(void) {
-#ifdef DEBUG_STRIP_LOCATION
-  movingDotDebug(stripIndex);
-#else
+  
   digitalWrite(TIMING_PIN_OUT, HIGH);
     switch (mode) {
     case STOPPED:
+      break;
+    case DEBUG:
+      movingDotDebug(stripIndex, stripDirection);
       break;
     case ANIM_MOVING_DOT:
       movingDot();
@@ -327,24 +359,26 @@ void animationFrame(void) {
       paletteShift();
       break;
   }
-#endif
   //delay(1);
   ledsClear();
 
   digitalWrite(TIMING_PIN_OUT, LOW);
 }
 
-void movingDotDebug(int stripIndex) {
+void movingDotDebug(int stripIndex, bool dir) {
   static int stripDot = 0;
   int dot = stripIndex * NUM_LED_PER_STRIP + stripDot;
+  if (!dir) {
+    dot = (stripIndex + 1) * NUM_LED_PER_STRIP - stripDot - 1;
+  }
   // set all black
   fill_solid(leds, NUM_LEDS, CRGB::Black);
   // set dot
-  leds[dot] = CRGB(255, 0, 0);
+  leds[dot] = CRGB(255, 255, 255);
   // increment dot for next time
   stripDot++;
-  if (stripDot >= NUM_LED_PER_STRIP)
-    stripDot = 0;
+  if (stripDot >= NUM_LED_PER_STRIP) stripDot = 0;
+  if (stripDot < 0) stripDot = NUM_LED_PER_STRIP - 1;
   // show leds
   FastLED.show();
 }
@@ -418,6 +452,13 @@ void ledsClear(void) {
   fill_solid(leds, NUM_LEDS, CRGB::Black);
   FastLED.show();
   //FastLED.clear();
+}
+
+const byte serial_preamble[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+void send_plaintext(String message){
+  Serial.write(serial_preamble, 8);
+  String to_send = message + '\n';
+  Serial.print(to_send);
 }
 
 void button_pressed(void) {
