@@ -1,4 +1,4 @@
-LED_PER_SEGMENT = 4
+LED_PER_SEGMENT = 30
 
 class Loop:
 
@@ -32,7 +32,7 @@ class Segment:
             end = (self.__index + 1) * LED_PER_SEGMENT
         else:
             start = (self.__index + 1) * LED_PER_SEGMENT - 1
-            end = self.__index * LED_PER_SEGMENT - 1
+            end = self.__index * LED_PER_SEGMENT -1
 
         for i in range(start, end):
             addresses.append(i)
@@ -54,7 +54,7 @@ def save_loops(loop_string):
     file.write(loop_string)
     file.close()
 
-filename = "led_test_addresses.csv"
+filename = "led_order_in_use.csv"
 
 raw_data = ""
 
@@ -74,7 +74,7 @@ for line in data_lines:
         if line[0] is not "#":
             data = line.strip().replace(" ", "").split(",")
             print(data)
-            seg = Segment(bool(data[1]), data[2])
+            seg = Segment(data[1] == "1", data[2])
             #print(str(seg))
             if not len(loops) > 0:
                 loops.append(Loop())
