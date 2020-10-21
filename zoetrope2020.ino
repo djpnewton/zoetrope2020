@@ -49,6 +49,10 @@
 
 /**************************************** Definitions ***********************************************/
 
+enum serial_cmd_t {
+  CMD_DEBUG_SEGMENT = 0
+};
+
 #ifdef DEBUG_STRIP_LOCATION
 #else
 enum anim_mode_t {
@@ -56,7 +60,8 @@ enum anim_mode_t {
     ANIM_MOVING_DOT = 1,
     ANIM_STATIC_RGB = 2,
     ANIM_HUECYCLE = 3,
-    ANIM_PALETTESHIFT = 4
+    ANIM_PALETTESHIFT = 4,
+    ANIM_DEBUG_SEGMENT = 10, // only accessable from serial command, not the button
 };
 #endif
 
@@ -65,9 +70,8 @@ enum anim_mode_t {
 bool led_failsafe = false;  // failsafe to not run if the LEDs would be run too hard
 CRGB leds[NUM_LEDS];        // LED Output Buffer
 CRGB* loops[NUM_LOOPS];     // pointers to parts of the LED buffer
-#ifdef DEBUG_STRIP_LOCATION
 int stripIndex = 0;
-#else
+#ifndef DEBUG_STRIP_LOCATION
 enum anim_mode_t mode = STOPPED;
 #endif
 Metro eventAnim = Metro(1000);
@@ -150,6 +154,29 @@ void loop() {
   }
   return;
   */
+
+#ifndef DEBUG_STRIP_LOCATION
+  // send data only when you receive data:
+  if (Serial.available() > 0) {
+    #define CMD_MAX 8
+    static byte cmd[CMD_MAX] = {0};
+    static int cmdIndex = 0;
+    // read the incoming char
+    byte in = Serial.read();
+    cmd[cmdIndex] = in;
+    cmdIndex++;
+    if (cmdIndex >= CMD_MAX) {
+      cmdIndex = 0;
+      switch (cmd[0]) {
+        case CMD_DEBUG_SEGMENT:
+          stripIndex = cmd[1];
+          if (stripIndex >= NUM_STRIPS)
+            stripIndex = 0;
+          mode = ANIM_DEBUG_SEGMENT;
+      }
+    }
+  }
+#endif
 
   // update stepper
   if (eventStepperUpdate.check() == 1) {
@@ -326,12 +353,14 @@ void animationFrame(void) {
     case ANIM_PALETTESHIFT:
       paletteShift();
       break;
+    case ANIM_DEBUG_SEGMENT:
+      movingDotDebug(stripIndex);
   }
 #endif
   //delay(1);
   ledsClear();
 
-  digitalWrite(TIMING_PIN_OUT, LOW);
+  //digitalWrite(TIMING_PIN_OUT, LOW);
 }
 
 void movingDotDebug(int stripIndex) {
