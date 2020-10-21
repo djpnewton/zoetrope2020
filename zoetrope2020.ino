@@ -16,7 +16,7 @@
 //#define DEBUG_STRIP_LOCATION
 
 /********************************** FastLED and Hardware Config *************************************/
-#define GLOBAL_BRIGHTNESS    4          // LED brightness (0-255), defines the LED PWM duty cycle
+#define GLOBAL_BRIGHTNESS   200         // LED brightness (0-255), defines the LED PWM duty cycle
 #define NUM_LED_PER_STRIP   30          //
 #define NUM_STRIPS_PER_SECTOR 8
 #define NUM_SECTORS         3
