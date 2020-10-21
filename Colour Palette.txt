@@ -1,0 +1,29 @@
+Dominant Purple:
+86, 11, 92
+
+Peachy Flesh:
+248, 94, 77
+
+Light Blue:
+29, 175, 244
+
+Off White:
+230, 223, 225
+
+LightyDark Blue:
+14, 120, 238
+
+Purple Skin:
+160, 46, 72
+
+Grey Blue:
+83, 111, 150
+
+Dark Blue:
+29, 41, 134
+
+BurgundyPurple:
+100, 10, 30
+
+Light Pink:
+222, 166, 181
