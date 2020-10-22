@@ -616,36 +616,44 @@ float _x_transalation_required_per_step(void) {
   return degrees_per_frame / degrees_per_led;            // 15 / 4 = 3.75 - 3, 4, 4, 4 ???
 }
 
-bool _xy_double_loop_to_bubblegrid(int* x, int* y) {
+void _xy_double_loop_to_bubblegrid(int* x, int* y) {
   *y = *y * 2;
   if (*x >= NUM_LEDS_X) {
     *x = *x - NUM_LEDS_X;
     *y = *y + 1;
-    return true;
   }
-  return false;
 }
 
-int _x_translation(int x, bool next) {
-  //TODO: This needs work!!!
-  
-  // move to grid
-  int y = 0;
-  bool modified = _xy_double_loop_to_bubblegrid(&x, &y);
+void _xy_bubblegrid_to_double_loop(int* x, int* y) {
+  if (*x < NUM_LEDS_X) {
+    *x = *x + NUM_LEDS_X;
+    *y = *y - 1;
+  }
+  *y = *y / 2;
+}
+
+struct coord_t {
+  int x, y;
+};
+
+struct coord_t _x_translate(int x, int y, bool next) {
+  // to bubble grid
+  _xy_double_loop_to_bubblegrid(&x, &y);
   // get translation amount
   static int c = 0;
+  if (next)
+    c++;
   int trans_x = 4;
   if (c % 4 == 0)
     trans_x = 3;
-  if (next)
-    c++;
   // translate x
   x = x - trans_x;
   if (x < 0)
     x = NUM_LEDS_X-1;
-  if (modified)
-    x = x + NUM_LEDS_X;
-  return x;
+  // to double loop
+  _xy_bubblegrid_to_double_loop(&x, &y);
+  struct coord_t res = {x, y};
+  return res;
 }
 
 bool _5050(void) {
@@ -723,8 +731,9 @@ void bubbles(void) {
   _move_bubbles(bubbles, MAX_BUBBLES);
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
-      int logicalLedIndex = XYsafe(/*_x_translation(j, (i==0 && j==0))*/j, i);
-      if (_in_bubble(bubbles, MAX_BUBBLES, i, j))
+      struct coord_t translation = _x_translate(j, i, (i==0 && j==0));
+      int logicalLedIndex = XYsafe(j + translation.x, i + translation.y);
+      if (_in_bubble(bubbles, MAX_BUBBLES, j, i))
         leds[logicalLedIndex] = ColorFromPalette(peach_with_white, j + offset);
       else
         leds[logicalLedIndex] = ColorFromPalette(purple_with_blue, j + offset);
