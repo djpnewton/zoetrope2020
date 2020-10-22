@@ -34,8 +34,7 @@
 #define LED_MHZ             10
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 (14)  // Generally 24 for tv and film etc
-#define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
+#define FPS                 (14.5)  // Generally 24 for tv and film etc
 #define ILLUMINATION_TIME   1           // 1ms
 
 #define STEPPER_STEPS_PER_REV   ((1036*2)/3)
@@ -83,6 +82,7 @@ int stripIndex = 0;
 #ifndef DEBUG_STRIP_LOCATION
 enum anim_mode_t mode = ANIM_STATIC_LOOPS;
 #endif
+float fps = FPS;
 Metro eventAnim = Metro(1000);
 Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
 IntervalTimer intStepperOn;
@@ -271,7 +271,8 @@ uint16_t XYsafe(uint8_t x, uint8_t y) {
 //
 
 void setupAnimation(void) {
-  eventAnim.interval(FRAME_INTERVAL);
+  int frame_interval = round(1000 / fps);
+  eventAnim.interval(frame_interval);
   eventAnim.reset();
 
 #ifdef DEBUG_STRIP_LOCATION
@@ -540,6 +541,13 @@ void staticColorLoops(void) {
 }
 
 void stroboColorLoops(void) {
+#define FPS_MOD (0.05)
+  enum fps_state_t {
+    STANDARD,
+    SLOWING,
+    SLOW,
+    ACCELERATING,
+  };
   enum color_state_t {
     PEACH_AND_PURPLE,
     TO_WHITE_AND_BLUE,
@@ -556,8 +564,10 @@ void stroboColorLoops(void) {
    CHSV(128, 255, 255),
    CHSV(192, 255, 255)
   );
+  static enum fps_state_t fps_state = STANDARD;
+  static uint32_t fps_count = 0;
   static enum color_state_t color_state = PEACH_AND_PURPLE;
-  static uint32_t count = 0;
+  static uint32_t color_count = 0;
   static uint8_t offsetLoop = 0;
   static uint8_t offsetPalette = 0;
   //static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 25, 235), CHSV(192, 255, 255), CHSV(128, 255, 255)};
@@ -575,33 +585,73 @@ void stroboColorLoops(void) {
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
+      if (i == 0 && j == 0) {
+        switch (fps_state) {
+          case STANDARD:
+            if (fps_count >= 140) {
+              fps_state = SLOWING;
+              fps_count = 0;
+            }
+            break;
+          case SLOWING: {
+            fps = fps - FPS_MOD;
+            int frame_interval = round(1000 / fps);
+            eventAnim.interval(frame_interval);
+            if (fps_count >= 30) {
+              fps_state = SLOW;
+              fps_count = 0;         
+            }
+            break;
+          }
+          case SLOW:
+            if (fps_count >= 140) {
+              fps_state = ACCELERATING;
+              fps_count = 0;
+            }
+            break;
+          case ACCELERATING: {
+            fps = fps + FPS_MOD;
+            int frame_interval = round(1000 / fps);
+            eventAnim.interval(frame_interval);
+            if (fps_count >= 30) {
+              fps_state = STANDARD;
+              fps_count = 0;
+              // reset just in case floating point shenanegans
+              fps = FPS;
+              frame_interval = round(1000 / fps);
+              eventAnim.interval(frame_interval);
+            }
+            break;
+          } 
+        }
+      }
       switch (color_state) {
         case PEACH_AND_PURPLE:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
-          if (count >= 140) {
+          if (color_count >= 140) {
             color_state = TO_WHITE_AND_BLUE;
-            count = 0;
+            color_count = 0;
           }
           break;
         case TO_WHITE_AND_BLUE:
-          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], (count * 128) / 30);
-          if (count >= 30) {
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], (color_count * 128) / 30);
+          if (color_count >= 30) {
             color_state = WHITE_AND_BLUE;
-            count = 0;         
+            color_count = 0;         
           }
           break;
         case WHITE_AND_BLUE:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128);
-          if (count >= 140) {
+          if (color_count >= 140) {
             color_state = TO_PEACH_AND_PURPLE;
-            count = 0;
+            color_count = 0;
           }
           break;
         case TO_PEACH_AND_PURPLE:
-          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128 + (count * 128) / 30);
-          if (count >= 30) {
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128 + (color_count * 128) / 30);
+          if (color_count >= 30) {
             color_state = PEACH_AND_PURPLE;
-            count = 0;         
+            color_count = 0;         
           }
           break;   
       }
@@ -609,7 +659,8 @@ void stroboColorLoops(void) {
   }
   
   offsetLoop++;
-  count++;
+  fps_count++;
+  color_count++;
   offsetPalette++;
   // show leds
   FastLED.show();
