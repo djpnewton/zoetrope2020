@@ -13,7 +13,7 @@
 
 #include "rn4870.h"
 
-#define STEPPER
+//#define STEPPER
 #define EXTENSION_STRIP
 //#define DEBUG_STRIP_LOCATION
 
@@ -31,10 +31,10 @@
 #define DATA_PIN1           11          // MOSI PIN
 #define CLOCK_PIN1          13          // SCK PIN
 #define LED_TYPE            LPD8806     // SPI Chipset LPD8806 (Same as 2019 Zoetrope)
-#define LED_MHZ             14
+#define LED_MHZ             10
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 24          // Generally 24 for tv and film etc
+#define FPS                 48          // Generally 24 for tv and film etc
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
@@ -52,9 +52,6 @@
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       1
 #define TIMING_PIN_OUT      5
-
-#define PI_INDICATOR_IN     2
-#define PI_INDICATOR_OUT    3
 
 /**************************************** Definitions ***********************************************/
 
@@ -310,7 +307,7 @@ void setupAnimation(void) {
       Serial.println("ANIM_BUBBLES");
       break;
     case ANIM_ROLLING_LOOP:
-      Serial.println("ANIM_ROLLING_LOOP")
+      Serial.println("ANIM_ROLLING_LOOP");
       break;
     default:
       mode = STOPPED;
@@ -452,7 +449,8 @@ void animationFrame(void) {
       paletteShift();
       break;
     case ANIM_STATIC_LOOPS:
-      staticColorLoops();
+      //staticColorLoops();
+      stroboColorLoops();
       break;
     case ANIM_BUBBLES:
       bubbles();
@@ -537,6 +535,47 @@ void staticColorLoops(void) {
       leds[logicalLedIndex] = CHSV(hues[i], 255, 255);
     }
   }
+  // show leds
+  FastLED.show();
+}
+
+void stroboColorLoops(void) {
+  static CHSVPalette16 peach_with_white = CHSVPalette16(
+   CHSV(0, 255, 255),
+   CHSV(0, 25, 235),
+   CHSV(0, 255, 255)
+  );
+  static CHSVPalette16 purple_with_blue = CHSVPalette16(
+   CHSV(192, 255, 255),
+   CHSV(128, 255, 255),
+   CHSV(192, 255, 255)
+  );
+  static uint8_t count = 0;
+  static uint8_t offsetLoop = 0;
+  static uint8_t offsetPalette = 0;
+  //static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 25, 235), CHSV(192, 255, 255), CHSV(128, 255, 255)};
+  static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 255, 255), CHSV(128, 255, 255), CHSV(128, 255, 255)};
+  CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
+  // set loops to hue
+  /*
+  for (int i=0; i<NUM_LOOPS; i++) {
+    for (int j=0; j < NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(j, i);
+      leds[logicalLedIndex] = hues[(i + offset) % NUM_LOOPS];
+    }
+  }
+  */
+  for (int i=0; i<NUM_LOOPS; i++) {
+    for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(j, i);
+      leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], j + offsetPalette);
+    }
+  }
+  
+  if (count % 8 == 0)
+    offsetLoop++;
+  count++;
+  offsetPalette++;
   // show leds
   FastLED.show();
 }
