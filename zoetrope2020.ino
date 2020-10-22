@@ -687,14 +687,14 @@ void _xy_double_loop_to_bubblegrid(int* x, int* y) {
   *y = *y * 2;
   if (*x >= NUM_LEDS_X) {
     *x = *x - NUM_LEDS_X;
-    *y = *y + 1;
+    *y = *y + NUM_LOOPS;
   }
 }
 
 void _xy_bubblegrid_to_double_loop(int* x, int* y) {
   if (*x < NUM_LEDS_X) {
     *x = *x + NUM_LEDS_X;
-    *y = *y - 1;
+    *y = *y - NUM_LOOPS;
   }
   *y = *y / 2;
 }
@@ -723,48 +723,68 @@ struct coord_t _x_translate(int x, int y, bool next) {
   return res;
 }
 
-bool _5050(void) {
-  return random(0, 2) == 1;
+int _modulate(void) {
+  return random(0, 24);
 }
 
 void _move_bubbles(struct bubble_t* bubbles, int max_bubbles) {
 #define RAD_MIN 1
 #define RAD_MAX 4
   for (int i=0; i < max_bubbles; i++) {
-    if (bubbles[i].radius == 0) {
+    struct bubble_t* bubble = &bubbles[i];
+    
+    if (bubble->radius == 0) {
       // init bubble
-      bubbles[i].radius = random(RAD_MIN, RAD_MAX + 1);
-      bubbles[i].x = random(0, NUM_LEDS_X + 1);
-      bubbles[i].y = random(0, NUM_LEDS_Y + 1);
+      bubble->radius = RAD_MAX;
+      bubble->x = i * NUM_LEDS_X / max_bubbles;
+      bubble->y = 0;
     }
+
+    //
+    //continue;
+    
     // change size
-    if (_5050()) {
-      if (bubbles[i].radius < RAD_MAX)
-        bubbles[i].radius++;
-    } else {
-      if (bubbles[i].radius > RAD_MIN)
-        bubbles[i].radius--;
+    int m = _modulate();
+    if (m == 0) {
+      if (bubble->radius < RAD_MAX)
+        bubble->radius++;
+    } else if (m == 1) {
+      if (bubble->radius > RAD_MIN)
+        bubble->radius--;
     }
     // change x
-    if (_5050()) {
-      bubbles[i].x++;
-      if (bubbles[i].x >= NUM_LEDS_X)
-        bubbles[i].x = 0;
-    } else {
-      bubbles[i].x--;
-      if (bubbles[i].x >= NUM_LEDS_X)
-        bubbles[i].x = NUM_LEDS_X - 1;
+    m = _modulate();
+    if (m == 0) {
+      bubble->x++;
+      if (bubble->x >= NUM_LEDS_X)
+        bubble->x = 0;
+    } else if (m == 1) {
+      bubble->x--;
+      if (bubble->x >= NUM_LEDS_X)
+        bubble->x = NUM_LEDS_X - 1;
     }
     // change y
-    if (_5050()) {
-      bubbles[i].y++;
-      if (bubbles[i].y >= NUM_LEDS_Y)
-        bubbles[1].y = 0;
-    } else {
-      bubbles[i].y--;
-      if (bubbles[i].y >= NUM_LEDS_Y)
-        bubbles[i].y = NUM_LEDS_Y - 1;
+    m = _modulate();
+    if (m == 0) {
+      bubble->y++;
+      if (bubble->y >= NUM_LEDS_Y)
+        bubble->y = 0;
+    } else if (m == 1) {
+      bubble->y--;
+      if (bubble->y >= NUM_LEDS_Y)
+        bubble->y = NUM_LEDS_Y - 1;
     }
+/*
+    Serial.print("x :");
+    Serial.print(bubble->x);
+    Serial.print(", ");
+    Serial.print("y :");
+    Serial.print(bubble->y);
+    Serial.print(", ");
+    Serial.print("r :");
+    Serial.print(bubble->radius);
+    Serial.println();
+*/
   }
 }
   
@@ -774,7 +794,9 @@ bool _in_bubble(struct bubble_t* bubbles, int max_bubbles, int x, int y) {
   for (int i=0; i < max_bubbles; i++) {
     struct bubble_t* bubble = &bubbles[i];
     int dx = abs(bubble->x - x);
+    dx = min(dx, NUM_LEDS_X - dx);
     int dy = abs(bubble->y - y);
+    dy = min(dy, NUM_LEDS_Y - dy);
     if (dx + dy < bubble->radius)
       return true;
   }
@@ -798,10 +820,11 @@ void bubbles(void) {
   _move_bubbles(bubbles, MAX_BUBBLES);
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
-      struct coord_t translation = _x_translate(j, i, (i==0 && j==0));
+      //struct coord_t translation = _x_translate(j, i, (i==0 && j==0));
+      struct coord_t translation = {0, 0};
       int logicalLedIndex = XYsafe(j + translation.x, i + translation.y);
       if (_in_bubble(bubbles, MAX_BUBBLES, j, i))
-        leds[logicalLedIndex] = ColorFromPalette(peach_with_white, j + offset);
+        leds[logicalLedIndex] = ColorFromPalette(peach_with_white, 0/*j + offset*/);
       else
         leds[logicalLedIndex] = ColorFromPalette(purple_with_blue, j + offset);
     }
