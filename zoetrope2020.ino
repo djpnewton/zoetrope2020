@@ -13,7 +13,7 @@
 
 #include "rn4870.h"
 
-//#define DEBUG_STRIP_LOCATION
+#define DEBUG_STRIP_LOCATION
 
 /********************************** FastLED and Hardware Config *************************************/
 #define GLOBAL_BRIGHTNESS   200         // LED brightness (0-255), defines the LED PWM duty cycle
@@ -49,6 +49,9 @@
 #define STEPPER_PIN_OUT     0
 #define BUTTON_PIN_IN       1
 #define TIMING_PIN_OUT      5
+
+#define PI_INDICATOR_IN     2
+#define PI_INDICATOR_OUT    3
 
 /**************************************** Definitions ***********************************************/
 
