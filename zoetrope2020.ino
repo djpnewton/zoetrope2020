@@ -73,6 +73,7 @@ enum anim_mode_t {
     ANIM_PALETTESHIFT = 5,
     ANIM_STATIC_LOOPS = 6,
     ANIM_BUBBLES = 7,
+    ANIM_ROLLING_LOOP = 8,
     ANIM_DEBUG_SEGMENT = 10, // only accessable from serial command, not the button
 };
 #endif
@@ -308,6 +309,9 @@ void setupAnimation(void) {
     case ANIM_BUBBLES:
       Serial.println("ANIM_BUBBLES");
       break;
+    case ANIM_ROLLING_LOOP:
+      Serial.println("ANIM_ROLLING_LOOP")
+      break;
     default:
       mode = STOPPED;
       setupAnimation();
@@ -453,6 +457,9 @@ void animationFrame(void) {
     case ANIM_BUBBLES:
       bubbles();
       break;
+    case ANIM_ROLLING_LOOP:
+      rollingColorLoops();
+      break;
     case ANIM_DEBUG_SEGMENT:
       movingDotDebug(stripIndex);
   }
@@ -476,6 +483,39 @@ void movingDotDebug(int stripIndex) {
     stripDot = 0;
   // show leds
   FastLED.show();
+}
+
+void rollingColorLoops(void) {
+  static uint8_t hues[NUM_LOOPS] = {0};
+  static uint8_t offset = 0;
+  // init hues
+  bool needInit = true;
+  for (int i=0; i<NUM_LOOPS; i++)
+    if (hues[i] != 0)
+      needInit = false;
+  if (needInit) {
+    for (int i=0; i<NUM_LOOPS; i++) {
+      hues[i] = i * 256/NUM_LOOPS;
+    } 
+  }
+
+  if(offset > NUM_LOOPS - 1){
+    offset = 0;
+  }
+
+  // set loops to hue
+  for (int i=0; i<NUM_LOOPS; i++) {
+    for (int j=0; j < NUM_LEDS_PER_LOOP; j++) {
+      int logicalLedIndex = XYsafe(j, i + offset);
+      leds[logicalLedIndex] = CHSV(hues[i + offset], 255, 255);
+    }
+  }
+
+  offset++;
+
+  // show leds
+  FastLED.show();
+  
 }
 
 void staticColorLoops(void) {
