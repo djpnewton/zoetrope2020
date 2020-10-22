@@ -34,15 +34,15 @@
 #define LED_MHZ             10
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 ((24*1)/2)  // Generally 24 for tv and film etc
+#define FPS                 (16)  // Generally 24 for tv and film etc
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
-#define STEPPER_STEPS_PER_REV   ((1036*1)/2)
+#define STEPPER_STEPS_PER_REV   ((1036*2)/3)
 #define STEPPER_MICROSTEPS      2
 #define STEPPER_INTERVAL_START  (1000000/10)   // 10hz
 #define STEPPER_INTERVAL_TARGET (1000000/(STEPPER_STEPS_PER_REV*STEPPER_MICROSTEPS)) // 1036hz, 1 RPS
-#define STEPPER_UPDATE_INTERVAL 250
+#define STEPPER_UPDATE_INTERVAL 500
 #define STEPPER_RAMP_FIXED      10
 #define STEPPER_RAMP_DAMP       50
 #define STEPPER_PULSE           10             // 10us
@@ -81,7 +81,7 @@ bool led_failsafe = false;                 // failsafe to not run if the LEDs wo
 CRGB leds[NUM_LEDS + NUM_LED_PER_STRIP];   // LED Output Buffer
 int stripIndex = 0;
 #ifndef DEBUG_STRIP_LOCATION
-enum anim_mode_t mode = STOPPED;
+enum anim_mode_t mode = ANIM_STATIC_LOOPS;
 #endif
 Metro eventAnim = Metro(1000);
 Metro eventStepperUpdate = Metro(STEPPER_UPDATE_INTERVAL);
@@ -568,7 +568,7 @@ void stroboColorLoops(void) {
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
-      leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], j + offsetPalette);
+      leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
     }
   }
   
