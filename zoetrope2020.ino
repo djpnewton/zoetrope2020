@@ -540,6 +540,12 @@ void staticColorLoops(void) {
 }
 
 void stroboColorLoops(void) {
+  enum color_state_t {
+    PEACH_AND_PURPLE,
+    TO_WHITE_AND_BLUE,
+    WHITE_AND_BLUE,
+    TO_PEACH_AND_PURPLE,
+  };
   static CHSVPalette16 peach_with_white = CHSVPalette16(
    CHSV(0, 255, 255),
    CHSV(0, 25, 235),
@@ -550,7 +556,8 @@ void stroboColorLoops(void) {
    CHSV(128, 255, 255),
    CHSV(192, 255, 255)
   );
-  static uint8_t count = 0;
+  static enum color_state_t color_state = PEACH_AND_PURPLE;
+  static uint32_t count = 0;
   static uint8_t offsetLoop = 0;
   static uint8_t offsetPalette = 0;
   //static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 25, 235), CHSV(192, 255, 255), CHSV(128, 255, 255)};
@@ -568,12 +575,40 @@ void stroboColorLoops(void) {
   for (int i=0; i<NUM_LOOPS; i++) {
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
-      leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
+      switch (color_state) {
+        case PEACH_AND_PURPLE:
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
+          if (count >= 140) {
+            color_state = TO_WHITE_AND_BLUE;
+            count = 0;
+          }
+          break;
+        case TO_WHITE_AND_BLUE:
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], (count * 128) / 30);
+          if (count >= 30) {
+            color_state = WHITE_AND_BLUE;
+            count = 0;         
+          }
+          break;
+        case WHITE_AND_BLUE:
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128);
+          if (count >= 140) {
+            color_state = TO_PEACH_AND_PURPLE;
+            count = 0;
+          }
+          break;
+        case TO_PEACH_AND_PURPLE:
+          leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128 + (count * 128) / 30);
+          if (count >= 30) {
+            color_state = PEACH_AND_PURPLE;
+            count = 0;         
+          }
+          break;   
+      }
     }
   }
   
-  //if (count % 2 == 0)
-    offsetLoop++;
+  offsetLoop++;
   count++;
   offsetPalette++;
   // show leds
