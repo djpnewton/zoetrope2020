@@ -13,7 +13,7 @@
 
 #include "rn4870.h"
 
-//#define STEPPER
+#define STEPPER
 #define EXTENSION_STRIP
 //#define DEBUG_STRIP_LOCATION
 
@@ -34,15 +34,15 @@
 #define LED_MHZ             10
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 48          // Generally 24 for tv and film etc
+#define FPS                 ((24*1)/2)  // Generally 24 for tv and film etc
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
-#define STEPPER_STEPS_PER_REV   1036
+#define STEPPER_STEPS_PER_REV   ((1036*1)/2)
 #define STEPPER_MICROSTEPS      2
 #define STEPPER_INTERVAL_START  (1000000/10)   // 10hz
 #define STEPPER_INTERVAL_TARGET (1000000/(STEPPER_STEPS_PER_REV*STEPPER_MICROSTEPS)) // 1036hz, 1 RPS
-#define STEPPER_UPDATE_INTERVAL 1000
+#define STEPPER_UPDATE_INTERVAL 250
 #define STEPPER_RAMP_FIXED      10
 #define STEPPER_RAMP_DAMP       50
 #define STEPPER_PULSE           10             // 10us
@@ -63,12 +63,12 @@ enum serial_cmd_t {
 #else
 enum anim_mode_t {
     STOPPED = 0,
-    ANIM_MOVING_DOT = 1,
-    ANIM_FILL_LOOPS = 2,
-    ANIM_STATIC_RGB = 3,
-    ANIM_HUECYCLE = 4,
-    ANIM_PALETTESHIFT = 5,
-    ANIM_STATIC_LOOPS = 6,
+    ANIM_STATIC_LOOPS = 1,
+    ANIM_MOVING_DOT = 2,
+    ANIM_FILL_LOOPS = 3,
+    ANIM_STATIC_RGB = 4,
+    ANIM_HUECYCLE = 5,
+    ANIM_PALETTESHIFT = 6,
     ANIM_BUBBLES = 7,
     ANIM_ROLLING_LOOP = 8,
     ANIM_DEBUG_SEGMENT = 10, // only accessable from serial command, not the button
@@ -572,7 +572,7 @@ void stroboColorLoops(void) {
     }
   }
   
-  if (count % 8 == 0)
+  //if (count % 2 == 0)
     offsetLoop++;
   count++;
   offsetPalette++;
