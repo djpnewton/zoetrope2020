@@ -34,7 +34,7 @@
 #define LED_MHZ             10
 #define COLOUR_ORDER        RGB         // Effects Colours (Changed from 2019 Zoetrope)
 
-#define FPS                 (16)  // Generally 24 for tv and film etc
+#define FPS                 (14)  // Generally 24 for tv and film etc
 #define FRAME_INTERVAL      (1000/FPS)  // 41.66ms
 #define ILLUMINATION_TIME   1           // 1ms
 
