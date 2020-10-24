@@ -541,7 +541,28 @@ void staticColorLoops(void) {
 }
 
 void stroboColorLoops(void) {
-#define FPS_MOD (0.05)
+#define FPS_BASE_MOD (0.05)
+
+#define COLOR_DWELL_BASE 140
+static uint8_t color_dwell_var = COLOR_DWELL_BASE;
+static uint8_t color_dwell_random = 0;
+
+#define COLOR_DWELL_MIN 90
+#define COLOR_DWELL_MAX 200
+
+#define COLOR_CHANGE_BASE 30
+#define COLOR_CHANGE_MIN 10
+
+#define COLOR_CHANGE_MAX 50
+static uint8_t color_change_var = COLOR_CHANGE_BASE;
+static uint8_t color_change_random = 0;
+
+#define RESET_RANDOM 10
+static uint8_t random_color_stuff_count = 0;
+static uint8_t random_fps_count = 0;
+
+static uint8_t palette_combo = 0;
+
   enum fps_state_t {
     STANDARD,
     SLOWING,
@@ -564,6 +585,20 @@ void stroboColorLoops(void) {
    CHSV(128, 255, 255),
    CHSV(192, 255, 255)
   );
+  static CHSVPalette16 randomness_one = CHSVPalette16(
+    CHSV(50, 255, 255),
+    CHSV(100, 50, 200),
+    CHSV(50, 255, 255)
+  );
+
+  static CHSVPalette16 randomness_two = CHSVPalette16(
+    CHSV(240, 100, 245),
+    CHSV(100, 50, 255),
+    CHSV(240, 100, 245)
+  );
+
+
+
   static enum fps_state_t fps_state = STANDARD;
   static uint32_t fps_count = 0;
   static enum color_state_t color_state = PEACH_AND_PURPLE;
@@ -594,7 +629,7 @@ void stroboColorLoops(void) {
             }
             break;
           case SLOWING: {
-            fps = fps - FPS_MOD;
+            fps = fps - FPS_BASE_MOD;
             int frame_interval = round(1000 / fps);
             eventAnim.interval(frame_interval);
             if (fps_count >= 30) {
@@ -610,7 +645,7 @@ void stroboColorLoops(void) {
             }
             break;
           case ACCELERATING: {
-            fps = fps + FPS_MOD;
+            fps = fps + FPS_BASE_MOD;
             int frame_interval = round(1000 / fps);
             eventAnim.interval(frame_interval);
             if (fps_count >= 30) {
@@ -621,6 +656,7 @@ void stroboColorLoops(void) {
               frame_interval = round(1000 / fps);
               eventAnim.interval(frame_interval);
             }
+
             break;
           } 
         }
@@ -628,30 +664,71 @@ void stroboColorLoops(void) {
       switch (color_state) {
         case PEACH_AND_PURPLE:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
-          if (color_count >= 140) {
+          if (color_count >= color_dwell_var) {
             color_state = TO_WHITE_AND_BLUE;
             color_count = 0;
           }
           break;
         case TO_WHITE_AND_BLUE:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], (color_count * 128) / 30);
-          if (color_count >= 30) {
+          if (color_count >= color_change_var) {
             color_state = WHITE_AND_BLUE;
             color_count = 0;         
           }
           break;
         case WHITE_AND_BLUE:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128);
-          if (color_count >= 140) {
+          if (color_count >= color_dwell_var) {
             color_state = TO_PEACH_AND_PURPLE;
             color_count = 0;
           }
           break;
         case TO_PEACH_AND_PURPLE:
+
+          palette_combo = random(0, 6);
+
+          switch(palette_combo) {
+            
+            case 0:
+              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
+              break;
+            case 1:
+              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, randomness_one, randomness_one};
+              break;
+            case 2:
+              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, randomness_two, randomness_two};
+              break;
+            case 3:
+              CHSVPalette16 palettes[NUM_LOOPS] = {purple_with_blue, purple_with_blue, randomness_one, randomness_one};
+              break;
+            case 4:
+              CHSVPalette16 palettes[NUM_LOOPS] = {purple_with_blue, purple_with_blue, randomness_two, randomness_two};
+              break;
+            case 5:
+              CHSVPalette16 palettes[NUM_LOOPS] = {randomness_one, randomness_one, randomness_two, randomness_two};
+              break;
+            case default:
+              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
+              break;
+          }
+
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128 + (color_count * 128) / 30);
-          if (color_count >= 30) {
+          if (color_count >= color_change_var) {
             color_state = PEACH_AND_PURPLE;
             color_count = 0;         
+          }
+          color_dwell_random = random(-10, 10);
+          color_dwell_var += color_dwell_random;
+          color_dwell_var = constrain(color_dwell_var, COLOR_DWELL_MIN, COLOR_DWELL_MAX);
+
+          color_change_random = random(-4, 4);
+          color_change_var += color_change_random;
+          color_change_var = constrain(color_change_var, COLOR_CHANGE_MIN, COLOR_CHANGE_MAX);
+          random_color_stuff_count++;
+          if(random_color_stuff_count >= 10){
+            color_dwell_var = COLOR_DWELL_BASE;
+            color_change_var = COLOR_CHANGE_BASE;
+            random_color_stuff_count = 0;
           }
           break;   
       }
