@@ -607,7 +607,7 @@ static uint8_t palette_combo = 0;
   static uint8_t offsetPalette = 0;
   //static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 25, 235), CHSV(192, 255, 255), CHSV(128, 255, 255)};
   static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 255, 255), CHSV(128, 255, 255), CHSV(128, 255, 255)};
-  CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
+  static CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
   // set loops to hue
   /*
   for (int i=0; i<NUM_LOOPS; i++) {
