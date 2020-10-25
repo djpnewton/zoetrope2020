@@ -13,7 +13,8 @@
 
 #include "rn4870.h"
 
-#define STEPPER
+// TODO: Test without the stepper
+//#define STEPPER
 #define EXTENSION_STRIP
 //#define DEBUG_STRIP_LOCATION
 
@@ -41,7 +42,7 @@
 #define STEPPER_MICROSTEPS      2
 #define STEPPER_INTERVAL_START  (1000000/10)   // 10hz
 #define STEPPER_INTERVAL_TARGET (1000000/(STEPPER_STEPS_PER_REV*STEPPER_MICROSTEPS)) // 1036hz, 1 RPS
-#define STEPPER_UPDATE_INTERVAL 500
+#define STEPPER_UPDATE_INTERVAL 480
 #define STEPPER_RAMP_FIXED      10
 #define STEPPER_RAMP_DAMP       50
 #define STEPPER_PULSE           10             // 10us
@@ -547,7 +548,7 @@ void stroboColorLoops(void) {
 static uint8_t color_dwell_var = COLOR_DWELL_BASE;
 static uint8_t color_dwell_random = 0;
 
-#define COLOR_DWELL_MIN 90
+#define COLOR_DWELL_MIN 80
 #define COLOR_DWELL_MAX 200
 
 #define COLOR_CHANGE_BASE 30
@@ -557,11 +558,14 @@ static uint8_t color_dwell_random = 0;
 static uint8_t color_change_var = COLOR_CHANGE_BASE;
 static uint8_t color_change_random = 0;
 
-#define RESET_RANDOM 10
+
+// TODO Increase random reset period
+#define RESET_RANDOM 20
 static uint8_t random_color_stuff_count = 0;
 static uint8_t random_fps_count = 0;
 
-static uint8_t palette_combo = 0;
+static uint8_t first_palette_index = 0;
+static uint8_t second_palette_index = 0;
 
   enum fps_state_t {
     STANDARD,
@@ -569,12 +573,14 @@ static uint8_t palette_combo = 0;
     SLOW,
     ACCELERATING,
   };
+
   enum color_state_t {
-    PEACH_AND_PURPLE,
-    TO_WHITE_AND_BLUE,
-    WHITE_AND_BLUE,
-    TO_PEACH_AND_PURPLE,
+    FIRST_COLOR_PAIR,
+    TO_SECOND_COLOR_PAIR,
+    SECOND_COLOR_PAIR,
+    TO_FIRST_COLOR_PAIR,
   };
+  // Add more palettes
   static CHSVPalette16 peach_with_white = CHSVPalette16(
    CHSV(0, 255, 255),
    CHSV(0, 25, 235),
@@ -586,22 +592,22 @@ static uint8_t palette_combo = 0;
    CHSV(192, 255, 255)
   );
   static CHSVPalette16 randomness_one = CHSVPalette16(
-    CHSV(50, 255, 255),
-    CHSV(100, 50, 200),
-    CHSV(50, 255, 255)
+    CHSV(80, 255, 255),
+    CHSV(100, 125, 255),
+    CHSV(80, 255, 255)
   );
 
   static CHSVPalette16 randomness_two = CHSVPalette16(
-    CHSV(240, 100, 245),
-    CHSV(100, 50, 255),
-    CHSV(240, 100, 245)
+    CHSV(240, 255, 255),
+    CHSV(100, 255, 255),
+    CHSV(240, 255, 245)
   );
 
 
 
   static enum fps_state_t fps_state = STANDARD;
   static uint32_t fps_count = 0;
-  static enum color_state_t color_state = PEACH_AND_PURPLE;
+  static enum color_state_t color_state = FIRST_COLOR_PAIR;
   static uint32_t color_count = 0;
   static uint8_t offsetLoop = 0;
   static uint8_t offsetPalette = 0;
@@ -621,6 +627,10 @@ static uint8_t palette_combo = 0;
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
       if (i == 0 && j == 0) {
+
+
+        // TODO: Implement variablity on the framerate
+
         switch (fps_state) {
           case STANDARD:
             if (fps_count >= 140) {
@@ -662,74 +672,92 @@ static uint8_t palette_combo = 0;
         }
       }
       switch (color_state) {
-        case PEACH_AND_PURPLE:
+        case FIRST_COLOR_PAIR:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 0/*j + offsetPalette*/);
           if (color_count >= color_dwell_var) {
-            color_state = TO_WHITE_AND_BLUE;
+            color_state = TO_SECOND_COLOR_PAIR;
             color_count = 0;
           }
           break;
-        case TO_WHITE_AND_BLUE:
+        case TO_SECOND_COLOR_PAIR:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], (color_count * 128) / 30);
           if (color_count >= color_change_var) {
-            color_state = WHITE_AND_BLUE;
+            color_state = SECOND_COLOR_PAIR;
             color_count = 0;         
           }
           break;
-        case WHITE_AND_BLUE:
+        case SECOND_COLOR_PAIR:
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128);
           if (color_count >= color_dwell_var) {
-            color_state = TO_PEACH_AND_PURPLE;
+            color_state = TO_FIRST_COLOR_PAIR;
             color_count = 0;
           }
           break;
-        case TO_PEACH_AND_PURPLE:
-
-          palette_combo = random(0, 6);
-
-          switch(palette_combo) {
-            
-            case 0:
-              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
-              break;
-            case 1:
-              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, randomness_one, randomness_one};
-              break;
-            case 2:
-              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, randomness_two, randomness_two};
-              break;
-            case 3:
-              CHSVPalette16 palettes[NUM_LOOPS] = {purple_with_blue, purple_with_blue, randomness_one, randomness_one};
-              break;
-            case 4:
-              CHSVPalette16 palettes[NUM_LOOPS] = {purple_with_blue, purple_with_blue, randomness_two, randomness_two};
-              break;
-            case 5:
-              CHSVPalette16 palettes[NUM_LOOPS] = {randomness_one, randomness_one, randomness_two, randomness_two};
-              break;
-            case default:
-              CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
-              break;
-          }
-
+        case TO_FIRST_COLOR_PAIR:
+        
           leds[logicalLedIndex] = ColorFromPalette(palettes[(i + offsetLoop) % NUM_LOOPS], 128 + (color_count * 128) / 30);
+          // TODO: Change over to be a while loop with two random nums, one for each slot.
+          // While loop, to check to make sure that they are not the same value for each slot
           if (color_count >= color_change_var) {
-            color_state = PEACH_AND_PURPLE;
-            color_count = 0;         
-          }
-          color_dwell_random = random(-10, 10);
-          color_dwell_var += color_dwell_random;
-          color_dwell_var = constrain(color_dwell_var, COLOR_DWELL_MIN, COLOR_DWELL_MAX);
 
-          color_change_random = random(-4, 4);
-          color_change_var += color_change_random;
-          color_change_var = constrain(color_change_var, COLOR_CHANGE_MIN, COLOR_CHANGE_MAX);
-          random_color_stuff_count++;
-          if(random_color_stuff_count >= 10){
-            color_dwell_var = COLOR_DWELL_BASE;
-            color_change_var = COLOR_CHANGE_BASE;
-            random_color_stuff_count = 0;
-          }
+              first_palette_index = random(0, 6);
+              CHSVPalette16 slot_1;
+              CHSVPalette16 slot_2;
+
+              // TODO Remove switch to make way for directly selecting the palettes from the random number generation stuffs.
+              switch(first_palette_index) {
+                
+                case 0:
+                   slot_1 = peach_with_white;
+                   slot_2 = purple_with_blue;
+                  break;
+                case 1:
+                   slot_1 = peach_with_white;
+                   slot_2 = randomness_one;
+                  break;
+                case 2:
+                   slot_1 = peach_with_white;
+                   slot_2 = randomness_two;
+                  break;
+                case 3:
+                   slot_1 = purple_with_blue;
+                   slot_2 = randomness_one;
+                  break;
+                case 4:
+                   slot_1 = purple_with_blue;
+                   slot_2 = randomness_two;
+                  break;
+                case 5:
+                   slot_1 = randomness_one;
+                   slot_2 = randomness_two;
+                  break;
+                default:
+                   slot_1 = peach_with_white;
+                   slot_2 = purple_with_blue;
+                  break;
+              }
+              palettes[0] = slot_1;
+              palettes[1] = slot_1;
+              palettes[2] = slot_2;
+              palettes[3] = slot_2;
+                
+              color_state = FIRST_COLOR_PAIR;
+              color_count = 0;     
+    
+              color_dwell_random = random(-10, 10);
+              color_dwell_var += color_dwell_random;
+              color_dwell_var = constrain(color_dwell_var, COLOR_DWELL_MIN, COLOR_DWELL_MAX);
+    
+              color_change_random = random(-4, 4);
+              color_change_var += color_change_random;
+              color_change_var = constrain(color_change_var, COLOR_CHANGE_MIN, COLOR_CHANGE_MAX);
+              random_color_stuff_count++;
+              if(random_color_stuff_count >= 10){
+                color_dwell_var = COLOR_DWELL_BASE;
+                color_change_var = COLOR_CHANGE_BASE;
+                random_color_stuff_count = 0;
+              }
+            }
           break;   
       }
     }
