@@ -597,17 +597,36 @@ static uint8_t random_fps_count = 0;
    CHSV(192, 255, 255)
   );
   static CHSVPalette16 randomness_one = CHSVPalette16(
-    CHSV(80, 255, 255),
-    CHSV(100, 125, 255),
-    CHSV(80, 255, 255)
+    CHSV(90, 255, 255),
+    CHSV(120, 125, 255),
+    CHSV(90, 255, 255)
   );
 
   static CHSVPalette16 randomness_two = CHSVPalette16(
-    CHSV(240, 255, 255),
-    CHSV(100, 255, 255),
-    CHSV(240, 255, 245)
+    CHSV(64, 255, 255),
+    CHSV(30, 255, 255),
+    CHSV(64, 255, 255)
   );
 
+  static CHSVPalette16 randomness_three = CHSVPalette16(
+    CHSV(140, 255, 255),
+    CHSV(160, 255, 255),
+    CHSV(140, 255, 255)
+  );
+  static CHSVPalette16 randomness_four = CHSVPalette16(
+    CHSV(224, 255, 255),
+    CHSV(210, 255, 255),
+    CHSV(224, 255, 255)
+  );
+
+//  static CHSVPalette16 randomness_two = CHSVPalette16(
+  //  CHSV(240, 255, 255),
+  //  CHSV(100, 255, 255),
+  //  CHSV(240, 255, 245)
+ // );
+
+  #define NUM_PALETTES 6
+  static CHSVPalette16 reference_palettes[NUM_PALETTES] = {peach_with_white, purple_with_blue, randomness_one, randomness_two, randomness_three, randomness_four};
 
 
   static enum fps_state_t fps_state = STANDARD;
@@ -618,7 +637,7 @@ static uint8_t random_fps_count = 0;
   static uint8_t offsetPalette = 0;
   //static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 25, 235), CHSV(192, 255, 255), CHSV(128, 255, 255)};
   static CHSV hues[NUM_LOOPS] = {CHSV(0, 255, 255), CHSV(0, 255, 255), CHSV(128, 255, 255), CHSV(128, 255, 255)};
-  static CHSVPalette16 palettes[NUM_LOOPS] = {peach_with_white, peach_with_white, purple_with_blue, purple_with_blue};
+  static CHSVPalette16 palettes[NUM_LOOPS] = {randomness_one, randomness_one, randomness_four, randomness_four};
   // set loops to hue
   /*
   for (int i=0; i<NUM_LOOPS; i++) {
@@ -670,7 +689,7 @@ static uint8_t random_fps_count = 0;
                 random_fps_deccel_multiplier = random(1,2);
               }
               // reset just in case floating point shenanegans
-              fps = FPS;
+                fps = FPS;
               random_fps_count ++;
               fps_state = STANDARD;
               fps_count = 0;
@@ -711,48 +730,24 @@ static uint8_t random_fps_count = 0;
           // TODO: Change over to be a while loop with two random nums, one for each slot.
           // While loop, to check to make sure that they are not the same value for each slot
           if (color_count >= color_change_var) {
-
-              first_palette_index = random(0, 6);
-              CHSVPalette16 slot_1;
-              CHSVPalette16 slot_2;
-
-              // TODO Remove switch to make way for directly selecting the palettes from the random number generation stuffs.
-              switch(first_palette_index) {
-                
-                case 0:
-                   slot_1 = peach_with_white;
-                   slot_2 = purple_with_blue;
+              
+              while(true){
+                first_palette_index = random(0, NUM_PALETTES);
+                second_palette_index = random(0, NUM_PALETTES);
+                if(first_palette_index != second_palette_index){
+                  palettes[0] = reference_palettes[first_palette_index];
+                  Serial.println("Changing");
+                  String msg = "Palette 1: " + String(first_palette_index);
+                  Serial.println(msg);
+                  palettes[1] = reference_palettes[first_palette_index];
+                  palettes[2] = reference_palettes[second_palette_index];
+                  msg = "Palette 2: " + String(second_palette_index);
+                  Serial.println(msg);
+                  palettes[3] = reference_palettes[second_palette_index];
                   break;
-                case 1:
-                   slot_1 = peach_with_white;
-                   slot_2 = randomness_one;
-                  break;
-                case 2:
-                   slot_1 = peach_with_white;
-                   slot_2 = randomness_two;
-                  break;
-                case 3:
-                   slot_1 = purple_with_blue;
-                   slot_2 = randomness_one;
-                  break;
-                case 4:
-                   slot_1 = purple_with_blue;
-                   slot_2 = randomness_two;
-                  break;
-                case 5:
-                   slot_1 = randomness_one;
-                   slot_2 = randomness_two;
-                  break;
-                default:
-                   slot_1 = peach_with_white;
-                   slot_2 = purple_with_blue;
-                  break;
+                }
               }
-              palettes[0] = slot_1;
-              palettes[1] = slot_1;
-              palettes[2] = slot_2;
-              palettes[3] = slot_2;
-                
+
               color_state = FIRST_COLOR_PAIR;
               color_count = 0;     
     
