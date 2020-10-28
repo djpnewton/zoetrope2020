@@ -14,7 +14,7 @@
 #include "rn4870.h"
 
 // TODO: Test without the stepper
-//#define STEPPER
+#define STEPPER
 #define EXTENSION_STRIP
 //#define DEBUG_STRIP_LOCATION
 
@@ -542,8 +542,6 @@ void staticColorLoops(void) {
 }
 
 void stroboColorLoops(void) {
-#define FPS_BASE_MOD (0.05)
-
 #define COLOR_DWELL_BASE 140
 static uint8_t color_dwell_var = COLOR_DWELL_BASE;
 static uint8_t color_dwell_random = 0;
@@ -551,21 +549,28 @@ static uint8_t color_dwell_random = 0;
 #define COLOR_DWELL_MIN 80
 #define COLOR_DWELL_MAX 200
 
-#define COLOR_CHANGE_BASE 30
-#define COLOR_CHANGE_MIN 10
+#define COLOR_CHANGE_BASE 35
+#define COLOR_CHANGE_MIN 30
+#define COLOR_CHANGE_MAX 55
 
-#define COLOR_CHANGE_MAX 50
 static uint8_t color_change_var = COLOR_CHANGE_BASE;
 static uint8_t color_change_random = 0;
-
+static uint8_t random_color_stuff_count = 0;
+static uint8_t first_palette_index = 0;
+static uint8_t second_palette_index = 0;
 
 // TODO Increase random reset period
 #define RESET_RANDOM 20
-static uint8_t random_color_stuff_count = 0;
-static uint8_t random_fps_count = 0;
 
-static uint8_t first_palette_index = 0;
-static uint8_t second_palette_index = 0;
+#define FPS_BASE_MOD (0.05)
+
+#define fps_multiplyer_min 1
+#define fps_multiplyer_max 6
+static uint8_t random_fps_accel_multiplier = random(fps_multiplyer_min, fps_multiplyer_max);
+static uint8_t random_fps_deccel_multiplier = random(1, 2);
+static uint8_t random_fps_count = 0;
+#define FPS_SUSTAIN_PERIOD 140
+#define FPS_ACCEL_PERIOD 30
 
   enum fps_state_t {
     STANDARD,
@@ -627,42 +632,49 @@ static uint8_t second_palette_index = 0;
     for (int j=0; j<NUM_LEDS_PER_LOOP; j++) {
       int logicalLedIndex = XYsafe(j, i);
       if (i == 0 && j == 0) {
-
-
         // TODO: Implement variablity on the framerate
 
         switch (fps_state) {
           case STANDARD:
-            if (fps_count >= 140) {
+            if (fps_count >= FPS_SUSTAIN_PERIOD) {
               fps_state = SLOWING;
               fps_count = 0;
             }
             break;
           case SLOWING: {
-            fps = fps - FPS_BASE_MOD;
+            fps = fps - (FPS_BASE_MOD * random_fps_deccel_multiplier);
             int frame_interval = round(1000 / fps);
             eventAnim.interval(frame_interval);
-            if (fps_count >= 30) {
+            if (fps_count >= FPS_ACCEL_PERIOD) {
               fps_state = SLOW;
               fps_count = 0;         
             }
             break;
           }
           case SLOW:
-            if (fps_count >= 140) {
+            if (fps_count >= FPS_SUSTAIN_PERIOD) {
               fps_state = ACCELERATING;
               fps_count = 0;
             }
             break;
           case ACCELERATING: {
-            fps = fps + FPS_BASE_MOD;
+            fps = fps + (FPS_BASE_MOD * random_fps_accel_multiplier);
             int frame_interval = round(1000 / fps);
             eventAnim.interval(frame_interval);
-            if (fps_count >= 30) {
-              fps_state = STANDARD;
-              fps_count = 0;
+            if (fps_count >= FPS_ACCEL_PERIOD) {
+
+              
+              if(random_fps_count >= 5){
+                random_fps_count = 0;
+                random_fps_accel_multiplier = random(fps_multiplyer_min,fps_multiplyer_max);
+                random_fps_deccel_multiplier = random(1,2);
+              }
               // reset just in case floating point shenanegans
               fps = FPS;
+              random_fps_count ++;
+              fps_state = STANDARD;
+              fps_count = 0;
+              
               frame_interval = round(1000 / fps);
               eventAnim.interval(frame_interval);
             }
